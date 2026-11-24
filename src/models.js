@@ -119,12 +119,26 @@ export function makeRaccoon() {
   const body = sphere(0.5, FUR, 0, 0.45, 0);
   body.scale.set(1, 1.1, 0.9);
   group.add(body);
-  const vest = cyl(0.5, 0.55, 0.5, 0xff7a1a, 0, 0.42, 0);
-  vest.scale.set(1, 1, 0.92);
-  group.add(vest);
-  const stripe = cyl(0.515, 0.535, 0.08, 0xf9f871, 0, 0.42, 0);
-  stripe.scale.set(1, 1, 0.92);
-  group.add(stripe);
+  // Safety vest: a shell over the torso and shoulders, open down the front,
+  // with a reflective band and shoulder straps.
+  const shell = (r, phiStart, phiLen, thStart, thLen, color) => {
+    const m = new THREE.Mesh(
+      new THREE.SphereGeometry(r, 28, 18, phiStart, phiLen, thStart, thLen),
+      toon(color, { side: THREE.DoubleSide }),
+    );
+    m.position.set(0, 0.45, 0);
+    m.scale.set(1, 1.1, 0.9);
+    m.userData.noOutline = true;
+    group.add(shadowy(m));
+    return m;
+  };
+  const GAP = 0.32; // half-width of the open front, in radians
+  const FRONT = Math.PI / 2;
+  shell(0.53, FRONT + GAP, Math.PI * 2 - GAP * 2, 0.5, 1.78, 0xff7a1a);
+  shell(0.537, FRONT + GAP, Math.PI * 2 - GAP * 2, 1.72, 0.2, 0xf9f871); // reflective band
+  for (const start of [FRONT + GAP, FRONT - GAP - 0.17, FRONT + Math.PI - 0.42, FRONT + Math.PI + 0.25]) {
+    shell(0.537, start, 0.17, 0.5, 1.22, 0xf9f871); // straps over the shoulders
+  }
   const belly = sphere(0.33, CREAM, 0, 0.75, 0.3);
   belly.scale.set(1, 0.7, 0.5);
   group.add(belly);
@@ -232,7 +246,7 @@ const outlineMat = new THREE.MeshBasicMaterial({ color: 0x24262b, side: THREE.Ba
 export function addOutline(root, width = 0.022, mat = outlineMat) {
   const targets = [];
   root.traverse((m) => {
-    if (!m.isMesh || m.userData.outline) return;
+    if (!m.isMesh || m.userData.outline || m.userData.noOutline) return;
     const p = m.geometry.parameters || {};
     const r = p.radius ?? p.radiusBottom ?? p.radiusTop;
     if (!r || r < 0.1) return;
@@ -520,7 +534,13 @@ export function makeTruck() {
   }
   addOutline(legs);
   steve.group.add(legs);
-  steve.tail[0].parent.visible = false; // tucked away behind the seat
+  // Tail: small, draped over the outer edge of the seat beside him
+  const tailRoot = steve.tail[0].parent;
+  tailRoot.position.set(0.3, 0.12, -0.3);
+  tailRoot.rotation.set(0, -Math.PI / 2 + 0.35, 0);
+  tailRoot.scale.setScalar(0.6);
+  steve.tailRest = steve.tail.map((_, i) => ({ x: i === 0 ? 0 : -0.38, y: 0 }));
+  steve.tailWag = 0.05;
   body.add(steve.group);
 
   // Steering wheel with column

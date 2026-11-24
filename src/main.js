@@ -1215,8 +1215,10 @@ function animateTruck(dt, time) {
   // Tail wags, faster at speed
   const sp = Math.abs(T.fwd);
   steve.tail.forEach((seg, i) => {
-    seg.rotation.y = Math.sin(time * (3 + sp * 0.2) - i * 0.6) * (0.18 + sp * 0.006);
-    seg.rotation.x = Math.sin(time * 2.1 - i * 0.5) * 0.08 + (i < 4 ? -0.12 : 0.22);
+    const rest = steve.tailRest ? steve.tailRest[i] : { x: i < 4 ? -0.12 : 0.22, y: 0 };
+    const wag = steve.tailWag ?? 0.18 + sp * 0.006;
+    seg.rotation.y = rest.y + Math.sin(time * 2.2 - i * 0.6) * wag;
+    seg.rotation.x = rest.x + Math.sin(time * 1.7 - i * 0.5) * wag * 0.4;
   });
   // Blink
   blinkT -= dt;
