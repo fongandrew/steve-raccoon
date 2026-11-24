@@ -1118,6 +1118,7 @@ function updateCats(dt, time) {
 // Steve's animation & truck visuals
 // ---------------------------------------------------------------------------
 let blinkT = 2;
+let steveLean = 0;
 
 function animateTruck(dt, time) {
   // Spring squash
@@ -1177,9 +1178,23 @@ function animateTruck(dt, time) {
   let headY = 0;
   let headX = 0;
   let headZ = 0;
+  // Body lean: a little out the doorway when cruising, more into left turns,
+  // inward on right turns, and well out (looking back) when reversing.
+  const reversing = T.fwd < -0.5;
+  const cruising = Math.abs(T.fwd) > 0.5;
+  let leanTarget;
+  if (reversing) leanTarget = 0.46;
+  else leanTarget = Math.max(-0.18, Math.min(0.4, (cruising ? 0.12 : 0.04) + T.steer * 0.5));
+  steveLean += (leanTarget - steveLean) * Math.min(1, dt * 5);
+  steve.group.rotation.z = -steveLean;
+  steve.group.position.x = steve.group.userData.baseX + Math.max(0, steveLean) * 0.6;
   if (state.chompT > 0) {
     headX = Math.abs(Math.sin(state.chompT * 18)) * 0.35;
     headY = Math.sin(state.chompT * 9) * 0.1;
+  } else if (reversing) {
+    // Look back over his shoulder, out the doorway
+    headY = 2.2;
+    headX = -0.1;
   } else if (state.hangry) {
     headZ = Math.sin(time * 25) * 0.12;
     headY = -T.steer * 0.8;
@@ -1194,7 +1209,8 @@ function animateTruck(dt, time) {
   steve.group.position.y = steve.group.userData.baseY + cele + (T.grounded ? 0 : 0.1);
   // Both paws on the wheel; the outer one waves out the doorway when celebrating
   const waving = state.celebrateT > 0;
-  steve.arms[0].rotation.set(waving ? -2.6 : -1.1, 0, 0.2 + T.steer * 0.6 + (waving ? 0.6 + Math.sin(state.celebrateT * 18) * 0.3 : 0));
+  if (reversing && !waving) steve.arms[0].rotation.set(-2.0, 0, 0.9); // grabs the door frame
+  else steve.arms[0].rotation.set(waving ? -2.6 : -1.1, 0, 0.2 + T.steer * 0.6 + (waving ? 0.6 + Math.sin(state.celebrateT * 18) * 0.3 : 0));
   steve.arms[1].rotation.set(-1.1, 0, -0.2 + T.steer * 0.6);
   // Tail wags, faster at speed
   const sp = Math.abs(T.fwd);

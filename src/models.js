@@ -505,6 +505,7 @@ export function makeTruck() {
   steve.group.position.set(0.75, 1.52, cabZ - 0.2);
   steve.group.scale.setScalar(0.95);
   steve.group.userData.baseY = 1.52;
+  steve.group.userData.baseX = 0.75;
   steve.head.position.set(0.22, 1.12, 0.04);
   steve.head.userData.baseTilt = -0.08;
   const legs = new THREE.Group();
