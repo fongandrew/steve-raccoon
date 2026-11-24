@@ -3,6 +3,195 @@
 import * as THREE from '../vendor/three.module.js';
 
 // ---------------------------------------------------------------------------
+// Types: the shapes the builders below hand back to the rest of the game
+// ---------------------------------------------------------------------------
+
+/**
+ * Options for a canvas-drawn text texture.
+ * @typedef {object} TextOptions
+ * @property {number} [w] canvas width in pixels
+ * @property {number} [h] canvas height in pixels
+ * @property {string | null} [bg] CSS fill behind the text; null leaves it transparent
+ * @property {string} [color] CSS colour of the text
+ * @property {string} [font] CSS font shorthand; shrunk to fit if the text is too wide
+ * @property {string | null} [stroke] CSS colour of an outline round the text
+ */
+
+/**
+ * Steve (also the statue in the plaza). `makeTruck` adds the tail overrides
+ * for the copy sitting in the driver's seat.
+ * @typedef {object} RaccoonModel
+ * @property {THREE.Group} group origin at his seat, facing +z
+ * @property {THREE.Group} head
+ * @property {THREE.Group[]} tail chain of segments, each a child of the last
+ * @property {[THREE.Group, THREE.Group]} arms
+ * @property {THREE.Group[]} eyes
+ * @property {{ x: number, y: number }[]} [tailRest] per-segment rest rotation
+ * @property {number} [tailWag] wag amplitude override
+ */
+
+/**
+ * Where a side-loader arm is in its swing (see cans.js).
+ * @typedef {object} ArmPose
+ * @property {number} ext boom extension
+ * @property {number} yaw
+ * @property {number} lift
+ * @property {number} tilt
+ * @property {number} close 0 = fingers open, 1 = gripping
+ */
+
+/**
+ * One automated side-loader arm (an element of `truck.arms`).
+ * @typedef {object} ArmModel
+ * @property {THREE.Group} base
+ * @property {THREE.Mesh} boom
+ * @property {THREE.Group} slide
+ * @property {THREE.Group} lever
+ * @property {THREE.Group} wrist
+ * @property {THREE.Group} gripper the wrist again: cans get attached to it
+ * @property {THREE.Group[]} fingers each has `userData.side` (1 or -1)
+ * @property {number} R lever length
+ * @property {number} GRIP
+ * @property {number} MAX_EXT
+ * @property {'right' | 'left'} side
+ * @property {ArmPose} pose current pose; cans.js animates it
+ */
+
+/**
+ * The front loader that lifts dumpsters over the cab (`truck.loader`).
+ * @typedef {object} LoaderModel
+ * @property {THREE.Group} pivot
+ * @property {THREE.Mesh[]} sliders telescoping inner arms, scaled along z
+ * @property {THREE.Group} forks
+ * @property {THREE.Vector3} P pivot position in the truck body's space
+ * @property {number} sliderStart
+ */
+
+/**
+ * @typedef {object} TruckModel
+ * @property {THREE.Group} group moves with the physics
+ * @property {THREE.Group} body bounces and squashes inside `group`
+ * @property {THREE.Group[]} wheels the spinning part of all six wheels
+ * @property {THREE.Group[]} frontWheels the steering pivots of the front pair
+ * @property {[ArmModel, ArmModel]} arms right (-x) then left
+ * @property {LoaderModel} loader
+ * @property {[THREE.Mesh, THREE.Mesh]} steeringWheel wheel and column
+ * @property {THREE.Mesh} beacon
+ * @property {THREE.MeshToonMaterial} beaconMat
+ * @property {RaccoonModel} steve
+ * @property {THREE.Vector3} hopperLocal mouth of the open hopper, in `group` space
+ * @property {THREE.Vector3} rearLocal rear door, for unloading
+ * @property {THREE.Group} fill trash in the hopper; raised as the load grows
+ * @property {THREE.MeshToonMaterial} lampMat headlights
+ */
+
+/**
+ * @typedef {object} HouseModel
+ * @property {THREE.Group} group faces +z, centred on the origin
+ * @property {number} w
+ * @property {number} d
+ * @property {number} col wall colour
+ * @property {number} roofCol
+ */
+
+/**
+ * @typedef {object} CanModel
+ * @property {THREE.Group} group
+ * @property {THREE.Group} lid
+ */
+
+/**
+ * @typedef {object} MarkerModel
+ * @property {THREE.Group} group
+ * @property {THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>} ring
+ * @property {THREE.Mesh<THREE.ConeGeometry, THREE.MeshToonMaterial>} arrow
+ */
+
+/**
+ * @typedef {object} CatModel
+ * @property {THREE.Group} group
+ * @property {THREE.Group} tail
+ * @property {THREE.Group} body
+ */
+
+/**
+ * @typedef {object} SeagullModel
+ * @property {THREE.Group} group
+ * @property {THREE.Group[]} wings
+ */
+
+/**
+ * @typedef {object} PigeonModel
+ * @property {THREE.Group} group
+ * @property {THREE.Group[]} wings
+ */
+
+/**
+ * @typedef {object} TreasureModel
+ * @property {THREE.Group} group
+ * @property {THREE.Group} spin the gem and its halo
+ * @property {THREE.Mesh<THREE.CylinderGeometry, THREE.MeshBasicMaterial>} beam
+ */
+
+/**
+ * @typedef {object} BeachBallModel
+ * @property {THREE.Group} group
+ * @property {THREE.Mesh<THREE.SphereGeometry, THREE.MeshToonMaterial>} ball
+ */
+
+/**
+ * @typedef {object} GooseModel
+ * @property {THREE.Group} group
+ * @property {THREE.Group} neck
+ * @property {THREE.Group} body
+ */
+
+/**
+ * The townsfolk: upright, dressed, and with places to be.
+ * @typedef {'bear' | 'fox' | 'bunnylady' | 'frog' | 'badger' | 'mole' | 'pig'} FolkSpecies
+ */
+
+/**
+ * @typedef {'kitten' | 'puppy' | 'dalmatian' | 'bunny' | 'hedgehog' | 'squirrel'} PetSpecies
+ */
+
+/** @typedef {PetSpecies | FolkSpecies} CritterSpecies */
+
+/**
+ * @typedef {object} CritterSpec
+ * @property {boolean} [folk] built by `makeTownsfolk`
+ * @property {number[]} colors fur colours to pick from
+ * @property {string[]} word what they shout
+ */
+
+/**
+ * @typedef {object} FolkSpec
+ * @property {number} top
+ * @property {number | null} pants null = bare legs in the fur colour
+ * @property {number} shoe
+ * @property {number} light muzzle colour
+ * @property {number} girth
+ * @property {number} height
+ */
+
+/**
+ * A citizen. Pets walk on four legs; townsfolk add `arms` and `biped`.
+ * @typedef {object} CritterModel
+ * @property {THREE.Group} group faces +z, feet at y = 0
+ * @property {THREE.Group} body posture pivot (hips-ish); the legs hang from it
+ * @property {THREE.Group} head
+ * @property {THREE.Group} tail
+ * @property {THREE.Group[]} tailSegs chain of tail segments; empty for stubby tails
+ * @property {THREE.Group[]} legs
+ * @property {THREE.Object3D[]} ears
+ * @property {THREE.Group[]} eyes blinkable
+ * @property {CritterSpecies} species
+ * @property {number} baseY resting height of `body`
+ * @property {THREE.Group[]} [arms] townsfolk only
+ * @property {boolean} [biped] townsfolk only
+ */
+
+// ---------------------------------------------------------------------------
 // Materials
 // ---------------------------------------------------------------------------
 
@@ -16,17 +205,27 @@ const gradient = (() => {
 	return tex;
 })();
 
+/** @type {Map<string, THREE.MeshToonMaterial>} */
 const matCache = new Map();
 
-/** Shared cel-shaded material for a color. */
+/**
+ * Shared cel-shaded material for a color.
+ * @param {number} color
+ * @param {THREE.MeshToonMaterialParameters} [opts]
+ * @returns {THREE.MeshToonMaterial}
+ */
 export function toon(color, opts = {}) {
 	const key = `${color}|${JSON.stringify(opts)}`;
 	if (!matCache.has(key)) {
 		matCache.set(key, new THREE.MeshToonMaterial({ color, gradientMap: gradient, ...opts }));
 	}
-	return matCache.get(key);
+	return /** @type {THREE.MeshToonMaterial} */ (matCache.get(key));
 }
 
+/**
+ * @param {number} color
+ * @param {number} [intensity]
+ */
 export function glow(color, intensity = 1) {
 	return toon(color, { emissive: color, emissiveIntensity: intensity });
 }
@@ -35,18 +234,44 @@ export function glow(color, intensity = 1) {
 // Primitive helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * @template {THREE.Object3D} T
+ * @param {T} mesh
+ * @param {boolean} [cast]
+ * @param {boolean} [receive]
+ * @returns {T}
+ */
 function shadowy(mesh, cast = true, receive = true) {
 	mesh.castShadow = cast;
 	mesh.receiveShadow = receive;
 	return mesh;
 }
 
+/**
+ * @param {number} w
+ * @param {number} h
+ * @param {number} d
+ * @param {number} color
+ * @param {number} [x]
+ * @param {number} [y]
+ * @param {number} [z]
+ * @param {THREE.Material} [mat] used instead of a toon material of `color`
+ */
 export function box(w, h, d, color, x = 0, y = 0, z = 0, mat) {
 	const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat || toon(color));
 	m.position.set(x, y, z);
 	return shadowy(m);
 }
 
+/**
+ * @param {number} r
+ * @param {number} color
+ * @param {number} [x]
+ * @param {number} [y]
+ * @param {number} [z]
+ * @param {number} [seg]
+ * @param {THREE.Material} [mat] used instead of a toon material of `color`
+ */
 export function sphere(r, color, x = 0, y = 0, z = 0, seg = 14, mat) {
 	const m = new THREE.Mesh(
 		new THREE.SphereGeometry(r, seg, Math.max(6, (seg * 0.7) | 0)),
@@ -56,18 +281,42 @@ export function sphere(r, color, x = 0, y = 0, z = 0, seg = 14, mat) {
 	return shadowy(m);
 }
 
+/**
+ * @param {number} rt
+ * @param {number} rb
+ * @param {number} h
+ * @param {number} color
+ * @param {number} [x]
+ * @param {number} [y]
+ * @param {number} [z]
+ * @param {number} [seg]
+ * @param {THREE.Material} [mat] used instead of a toon material of `color`
+ */
 export function cyl(rt, rb, h, color, x = 0, y = 0, z = 0, seg = 14, mat) {
 	const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), mat || toon(color));
 	m.position.set(x, y, z);
 	return shadowy(m);
 }
 
+/**
+ * @param {number} r
+ * @param {number} h
+ * @param {number} color
+ * @param {number} [x]
+ * @param {number} [y]
+ * @param {number} [z]
+ * @param {number} [seg]
+ */
 function cone(r, h, color, x = 0, y = 0, z = 0, seg = 10) {
 	const m = new THREE.Mesh(new THREE.ConeGeometry(r, h, seg), toon(color));
 	m.position.set(x, y, z);
 	return shadowy(m);
 }
 
+/**
+ * @param {string[]} lines
+ * @param {TextOptions} [opts]
+ */
 function textTexture(
 	lines,
 	{
@@ -82,7 +331,7 @@ function textTexture(
 	const c = document.createElement('canvas');
 	c.width = w;
 	c.height = h;
-	const g = c.getContext('2d');
+	const g = /** @type {CanvasRenderingContext2D} */ (c.getContext('2d'));
 	if (bg) {
 		g.fillStyle = bg;
 		g.fillRect(0, 0, w, h);
@@ -93,7 +342,8 @@ function textTexture(
 	// Shrink the font until the widest line fits
 	const widest = Math.max(...lines.map((l) => g.measureText(l).width));
 	if (widest > w * 0.9) {
-		const size = parseFloat(/(\d+(?:\.\d+)?)px/.exec(font)[1]);
+		const m = /** @type {RegExpExecArray} */ (/(\d+(?:\.\d+)?)px/.exec(font));
+		const size = parseFloat(/** @type {string} */ (m[1]));
 		g.font = font.replace(/\d+(?:\.\d+)?px/, `${Math.floor((size * w * 0.9) / widest)}px`);
 	}
 	const lh = h / (lines.length + 0.5);
@@ -124,6 +374,7 @@ const CREAM = 0xf4efe6;
 /**
  * Builds Steve. Returns { group, head, tail: [segments], armL, armR, eyes }.
  * Origin is at Steve's seat; he faces +z.
+ * @returns {RaccoonModel}
  */
 export function makeRaccoon() {
 	const group = new THREE.Group();
@@ -134,6 +385,14 @@ export function makeRaccoon() {
 	group.add(body);
 	// Safety vest: a shell over the torso and shoulders, open down the front,
 	// with a reflective band and shoulder straps.
+	/**
+	 * @param {number} r
+	 * @param {number} phiStart
+	 * @param {number} phiLen
+	 * @param {number} thStart
+	 * @param {number} thLen
+	 * @param {number} color
+	 */
 	const shell = (r, phiStart, phiLen, thStart, thLen, color) => {
 		const m = new THREE.Mesh(
 			new THREE.SphereGeometry(r, 28, 18, phiStart, phiLen, thStart, thLen),
@@ -198,6 +457,7 @@ export function makeRaccoon() {
 		head.add(brow);
 	}
 	// Eyes (big and shiny)
+	/** @type {THREE.Group[]} */
 	const eyes = [];
 	for (const side of [1, -1]) {
 		const eye = new THREE.Group();
@@ -223,6 +483,7 @@ export function makeRaccoon() {
 	head.add(brim);
 
 	// Arms (reach forward for the wheel)
+	/** @type {THREE.Group[]} */
 	const arms = [];
 	for (const side of [1, -1]) {
 		const arm = new THREE.Group();
@@ -237,6 +498,7 @@ export function makeRaccoon() {
 	}
 
 	// Ringed tail: a chain of segments that gets animated
+	/** @type {THREE.Group[]} */
 	const tail = [];
 	let parent = group;
 	const tailRoot = new THREE.Group();
@@ -258,17 +520,27 @@ export function makeRaccoon() {
 	parent.add(sphere(0.17, FUR_DARK, 0, 0, -0.3, 10));
 
 	addOutline(group);
-	return { group, head, tail, arms, eyes };
+	return { group, head, tail, arms: /** @type {[THREE.Group, THREE.Group]} */ (arms), eyes };
 }
 
 const outlineMat = new THREE.MeshBasicMaterial({ color: 0x24262b, side: THREE.BackSide });
 
-/** Cartoon ink outline: inverted-hull copies of round meshes. */
+/**
+ * Cartoon ink outline: inverted-hull copies of round meshes.
+ * @param {THREE.Object3D} root
+ * @param {number} [width]
+ * @param {THREE.Material} [mat]
+ */
 export function addOutline(root, width = 0.022, mat = outlineMat) {
+	/** @type {[THREE.Mesh, number][]} */
 	const targets = [];
-	root.traverse((m) => {
+	root.traverse((obj) => {
+		const m = /** @type {THREE.Mesh} */ (obj);
 		if (!m.isMesh || m.userData.outline || m.userData.noOutline) return;
-		const p = m.geometry.parameters || {};
+		/** @type {{ radius?: number, radiusBottom?: number, radiusTop?: number }} */
+		const p =
+			/** @type {THREE.BufferGeometry & { parameters?: object }} */ (m.geometry).parameters ||
+			{};
 		const r = p.radius ?? p.radiusBottom ?? p.radiusTop;
 		if (!r || r < 0.1) return;
 		if (!(
@@ -299,6 +571,7 @@ const DARK = 0x2b2d33;
  * Returns { group (moves with physics), body (bounces / squashes), wheels,
  * frontWheels, arm, beacon, steve, hopperLocal }.
  * Faces +z. Right side is -x, left (driver) side is +x.
+ * @returns {TruckModel}
  */
 export function makeTruck() {
 	const group = new THREE.Group();
@@ -458,7 +731,7 @@ export function makeTruck() {
 	for (let i = 0; i < 9; i++) {
 		const lump = sphere(
 			0.18 + (i % 3) * 0.06,
-			lumpCols[i % lumpCols.length],
+			/** @type {number} */ (lumpCols[i % lumpCols.length]),
 			-1.05 + (i % 5) * 0.5,
 			0.06,
 			-0.35 + ((i * 7) % 4) * 0.22,
@@ -495,7 +768,7 @@ export function makeTruck() {
 	// Hazard stripes under the mouth
 	const hazard = textTexture([''], { w: 256, h: 32, bg: '#ffd23f' });
 	{
-		const g = hazard.image.getContext('2d');
+		const g = /** @type {CanvasRenderingContext2D} */ (hazard.image.getContext('2d'));
 		g.fillStyle = '#2b2d33';
 		for (let x = -32; x < 256; x += 32) {
 			g.beginPath();
@@ -553,6 +826,10 @@ export function makeTruck() {
 
 	// Automated side-loader arms, one per side, level with the hopper. Each is
 	// built on the right (-x); the left one lives in a mirrored group.
+	/**
+	 * @param {THREE.Object3D} P the group the arm is built into
+	 * @returns {Omit<ArmModel, 'side'>}
+	 */
 	const buildArm = (P) => {
 		const ARM = { R: 2.1, GRIP: 0.62, MAX_EXT: 6.4 };
 		const ARM_YELLOW = 0xffc93c;
@@ -569,7 +846,7 @@ export function makeTruck() {
 		armBase.add(boom);
 		const slide = new THREE.Group();
 		armBase.add(slide);
-		const pin = (parent, r = 0.17) => {
+		const pin = (/** @type {THREE.Object3D} */ parent, r = 0.17) => {
 			const j = cyl(r, r, 0.46, STEEL, 0, 0, 0, 12);
 			j.rotation.x = Math.PI / 2;
 			parent.add(j);
@@ -585,6 +862,7 @@ export function makeTruck() {
 		pin(wrist, 0.15);
 		// Palm plate facing outward and two fingers that close around the can
 		wrist.add(box(0.12, 0.6, 0.9, STEEL, -0.08, 0, 0));
+		/** @type {THREE.Group[]} */
 		const fingers = [];
 		for (const side of [1, -1]) {
 			const f = new THREE.Group();
@@ -595,18 +873,24 @@ export function makeTruck() {
 			wrist.add(f);
 			fingers.push(f);
 		}
-		return { base: armBase, boom, slide, lever, wrist, gripper: wrist, fingers, ...ARM };
+		// at rest, the same pose cans.js starts every arm in
+		const pose = { ext: 0, yaw: 0, lift: 0, tilt: 0, close: 0 };
+		return { base: armBase, boom, slide, lever, wrist, gripper: wrist, fingers, ...ARM, pose };
 	};
-	const arms = [buildArm(body)];
+	// `side` is filled in just below
+	/** @type {ArmModel[]} */
+	const arms = [/** @type {ArmModel} */ (buildArm(body))];
 	const mirror = new THREE.Group();
 	mirror.scale.x = -1;
 	body.add(mirror);
-	arms.push(buildArm(mirror));
-	arms[0].side = 'right';
-	arms[1].side = 'left';
+	arms.push(/** @type {ArmModel} */ (buildArm(mirror)));
+	/** @type {ArmModel} */ (arms[0]).side = 'right';
+	/** @type {ArmModel} */ (arms[1]).side = 'left';
 
 	// Wheels + fenders
+	/** @type {THREE.Group[]} */
 	const wheels = [];
+	/** @type {THREE.Group[]} */
 	const frontWheels = [];
 	const wheelGeo = new THREE.CylinderGeometry(0.62, 0.62, 0.5, 18);
 	wheelGeo.rotateZ(Math.PI / 2);
@@ -638,11 +922,11 @@ export function makeTruck() {
 		body.add(box(0.64, 0.24, 0.1, 0x3a3d45, sx, 1.22, -0.92));
 		body.add(box(0.58, 0.6, 0.05, 0x2b2d33, sx, 0.72, -3.62));
 	}
-	for (const [z, front] of [
+	for (const [z, front] of /** @type {[number, boolean][]} */ ([
 		[2.4, true],
 		[-1.6, false],
 		[-2.9, false],
-	]) {
+	])) {
 		for (const sx of [1.3, -1.3]) {
 			const steer = new THREE.Group();
 			steer.position.set(sx, 0.62, z);
@@ -684,7 +968,9 @@ export function makeTruck() {
 	addOutline(legs);
 	steve.group.add(legs);
 	// Tail: small, draped over the outer edge of the seat beside him
-	const tailRoot = steve.tail[0].parent;
+	const tailRoot = /** @type {THREE.Object3D} */ (
+		/** @type {THREE.Group} */ (steve.tail[0]).parent
+	);
 	tailRoot.position.set(-0.3, 0.12, -0.3);
 	tailRoot.rotation.set(0, Math.PI / 2 - 0.35, 0);
 	tailRoot.scale.setScalar(0.6);
@@ -700,6 +986,7 @@ export function makeTruck() {
 	const column = cyl(0.05, 0.05, 0.4, DARK, -0.75, 2.4, cabZ + 0.62, 6);
 	column.rotation.x = 0.6;
 	body.add(column);
+	/** @type {[THREE.Mesh, THREE.Mesh]} */
 	const steeringWheel = [wheel, column];
 
 	// A tiny air freshener shaped like a pine tree (ironic)
@@ -714,6 +1001,7 @@ export function makeTruck() {
 	body.add(loaderPivot);
 	const sliderGeo = new THREE.BoxGeometry(0.16, 0.22, 1);
 	sliderGeo.translate(0, 0, 0.5);
+	/** @type {THREE.Mesh[]} */
 	const sliders = [];
 	for (const s of [1, -1]) {
 		body.add(box(0.3, 2.7, 0.4, 0x55585f, s * 1.62, 2.2, LOADER_P.z)); // post
@@ -743,7 +1031,7 @@ export function makeTruck() {
 		body,
 		wheels,
 		frontWheels,
-		arms,
+		arms: /** @type {[ArmModel, ArmModel]} */ (arms),
 		loader,
 		steeringWheel,
 		beacon,
@@ -782,8 +1070,19 @@ export const nightMats = {
 };
 
 const DOOR_COLORS = [0xd9534f, 0x2d936c, 0x3d7ea6, 0xffb300, 0x8e5b3d, 0x6c5ce7];
-const shade = (hex, k) => new THREE.Color(hex).multiplyScalar(k).getHex();
+const shade = (/** @type {number} */ hex, /** @type {number} */ k) =>
+	new THREE.Color(hex).multiplyScalar(k).getHex();
 
+/**
+ * @param {THREE.Group} g
+ * @param {number} x
+ * @param {number} y
+ * @param {number} z
+ * @param {number} rotY
+ * @param {number | null} shutterCol
+ * @param {() => number} rand
+ * @param {boolean} [flowers]
+ */
 function houseWindow(g, x, y, z, rotY, shutterCol, rand, flowers = true) {
 	const win = new THREE.Group();
 	win.add(box(1.5, 1.25, 0.12, 0xffffff, 0, 0, 0));
@@ -796,7 +1095,9 @@ function houseWindow(g, x, y, z, rotY, shutterCol, rand, flowers = true) {
 	if (flowers) {
 		win.add(box(1.5, 0.24, 0.32, 0x8e5b3d, 0, -0.74, 0.12));
 		for (let i = 0; i < 4; i++) {
-			const fc = [0xff6b9d, 0xffd23f, 0xff8c42, 0xffffff][(rand() * 4) | 0];
+			const fc = /** @type {number} */ (
+				[0xff6b9d, 0xffd23f, 0xff8c42, 0xffffff][(rand() * 4) | 0]
+			);
 			win.add(sphere(0.12, fc, -0.54 + i * 0.36, -0.56, 0.14, 6));
 		}
 	}
@@ -805,15 +1106,19 @@ function houseWindow(g, x, y, z, rotY, shutterCol, rand, flowers = true) {
 	g.add(win);
 }
 
-/** A cute house facing +z, centered on origin. */
+/**
+ * A cute house facing +z, centered on origin.
+ * @param {() => number} rand
+ * @returns {HouseModel}
+ */
 export function makeHouse(rand) {
 	const g = new THREE.Group();
 	const w = 8 + rand() * 2;
 	const d = 6.5 + rand() * 1;
 	const h = 3.4 + rand() * 1.0;
-	const col = HOUSE_COLORS[(rand() * HOUSE_COLORS.length) | 0];
-	const roofCol = ROOF_COLORS[(rand() * ROOF_COLORS.length) | 0];
-	const doorCol = DOOR_COLORS[(rand() * DOOR_COLORS.length) | 0];
+	const col = /** @type {number} */ (HOUSE_COLORS[(rand() * HOUSE_COLORS.length) | 0]);
+	const roofCol = /** @type {number} */ (ROOF_COLORS[(rand() * ROOF_COLORS.length) | 0]);
+	const doorCol = /** @type {number} */ (DOOR_COLORS[(rand() * DOOR_COLORS.length) | 0]);
 	const shutterCol = rand() < 0.75 ? shade(roofCol, 0.85) : null;
 	const base = 0.35;
 
@@ -910,12 +1215,17 @@ export function makeHouse(rand) {
 	return { group: g, w, d, col, roofCol };
 }
 
+/**
+ * @param {() => number} rand
+ * @param {number} [scale]
+ * @returns {THREE.Group}
+ */
 export function makeTree(rand, scale = 1) {
 	const g = new THREE.Group();
 	if (rand() < 0.25) {
 		// Pine
 		g.add(cyl(0.2, 0.28, 1.4, 0x8e5b3d, 0, 0.7, 0, 7));
-		const pine = [0x2f9e5b, 0x3aae63, 0x268a4f][(rand() * 3) | 0];
+		const pine = /** @type {number} */ ([0x2f9e5b, 0x3aae63, 0x268a4f][(rand() * 3) | 0]);
 		for (let i = 0; i < 3; i++) {
 			const c = new THREE.Mesh(new THREE.ConeGeometry(1.6 - i * 0.4, 1.8, 7), toon(pine));
 			c.position.y = 1.6 + i * 1.0;
@@ -933,7 +1243,7 @@ export function makeTree(rand, scale = 1) {
 		const r = 1.3 - i * 0.25 + rand() * 0.3;
 		const m = new THREE.Mesh(
 			new THREE.IcosahedronGeometry(r, 0),
-			toon(greens[(rand() * greens.length) | 0]),
+			toon(/** @type {number} */ (greens[(rand() * greens.length) | 0])),
 		);
 		m.position.set((rand() - 0.5) * 0.6, trunkH + 0.4 + i * 0.95, (rand() - 0.5) * 0.6);
 		m.rotation.set(rand() * 3, rand() * 3, 0);
@@ -943,6 +1253,10 @@ export function makeTree(rand, scale = 1) {
 	return g;
 }
 
+/**
+ * @param {() => number} rand
+ * @returns {THREE.Group}
+ */
 export function makeBush(rand) {
 	const g = new THREE.Group();
 	for (let i = 0; i < 3; i++) {
@@ -956,7 +1270,11 @@ export function makeBush(rand) {
 	return g;
 }
 
-/** Trash can. Returns { group, lid, glowRing }. */
+/**
+ * Trash can. Returns { group, lid, glowRing }.
+ * @param {boolean} [golden]
+ * @returns {CanModel}
+ */
 export function makeTrashCan(golden = false) {
 	const g = new THREE.Group();
 	const col = golden ? 0xffd23f : 0x4a6fa5;
@@ -975,7 +1293,11 @@ export function makeTrashCan(golden = false) {
 	return { group: g, lid };
 }
 
-/** Floating marker above an active can. */
+/**
+ * Floating marker above an active can.
+ * @param {boolean} [golden]
+ * @returns {MarkerModel}
+ */
 export function makeMarker(golden = false) {
 	const g = new THREE.Group();
 	const col = golden ? 0xffd23f : 0x7cf3a0;
@@ -998,10 +1320,14 @@ export function makeMarker(golden = false) {
 	return { group: g, ring, arrow };
 }
 
+/**
+ * @param {() => number} rand
+ * @returns {THREE.Group}
+ */
 export function makeMailbox(rand) {
 	const g = new THREE.Group();
 	g.add(cyl(0.08, 0.08, 1.1, 0x8e5b3d, 0, 0.55, 0, 6));
-	const col = [0x4a6fa5, 0xd9534f, 0x2d936c, 0x333333][(rand() * 4) | 0];
+	const col = /** @type {number} */ ([0x4a6fa5, 0xd9534f, 0x2d936c, 0x333333][(rand() * 4) | 0]);
 	g.add(box(0.45, 0.45, 0.8, col, 0, 1.25, 0));
 	const top = cyl(0.225, 0.225, 0.8, col, 0, 1.47, 0, 10);
 	top.rotation.x = Math.PI / 2;
@@ -1031,10 +1357,14 @@ export function makeCone() {
 	return g;
 }
 
-/** Little cat. Returns { group, tail, body }. */
+/**
+ * Little cat. Returns { group, tail, body }.
+ * @param {() => number} rand
+ * @returns {CatModel}
+ */
 export function makeCat(rand) {
 	const g = new THREE.Group();
-	const col = [0xff9f43, 0x2d3436, 0xdfe6e9, 0x9c7a5b][(rand() * 4) | 0];
+	const col = /** @type {number} */ ([0xff9f43, 0x2d3436, 0xdfe6e9, 0x9c7a5b][(rand() * 4) | 0]);
 	const body = new THREE.Group();
 	g.add(body);
 	const torso = sphere(0.35, col, 0, 0.45, 0, 10);
@@ -1060,6 +1390,7 @@ export function makeCat(rand) {
 	return { group: g, tail, body };
 }
 
+/** @returns {SeagullModel} */
 export function makeSeagull() {
 	const g = new THREE.Group();
 	const b = sphere(0.35, 0xffffff, 0, 0, 0, 8);
@@ -1069,6 +1400,7 @@ export function makeSeagull() {
 	const beak = cone(0.07, 0.3, 0xffb300, 0, 0.12, 0.8, 6);
 	beak.rotation.x = Math.PI / 2;
 	g.add(beak);
+	/** @type {THREE.Group[]} */
 	const wings = [];
 	for (const s of [1, -1]) {
 		const w = new THREE.Group();
@@ -1081,7 +1413,12 @@ export function makeSeagull() {
 	return { group: g, wings };
 }
 
-/** Lumpy heap of garbage for the dump. */
+/**
+ * Lumpy heap of garbage for the dump.
+ * @param {() => number} rand
+ * @param {number} [radius]
+ * @returns {THREE.Group}
+ */
 export function makeTrashPile(rand, radius = 7) {
 	const g = new THREE.Group();
 	const H = 4.2;
@@ -1089,7 +1426,14 @@ export function makeTrashPile(rand, radius = 7) {
 	const mound = new THREE.Mesh(new THREE.ConeGeometry(radius, H, 10, 2), toon(0x8d6e4f));
 	mound.position.y = H / 2;
 	g.add(shadowy(mound));
-	const surf = (r) => (1 - r / radius) * H;
+	const surf = (/** @type {number} */ r) => (1 - r / radius) * H;
+	/**
+	 * @template {THREE.Object3D} T
+	 * @param {T} obj
+	 * @param {number} rMin
+	 * @param {number} rMax
+	 * @returns {T}
+	 */
 	const place = (obj, rMin, rMax) => {
 		const a = rand() * Math.PI * 2;
 		const r = rMin + rand() * (rMax - rMin);
@@ -1111,7 +1455,7 @@ export function makeTrashPile(rand, radius = 7) {
 			0.8 + rand() * 0.6,
 			0.6 + rand() * 0.5,
 			0.8 + rand() * 0.5,
-			boxCols[(rand() * 3) | 0],
+			/** @type {number} */ (boxCols[(rand() * 3) | 0]),
 		);
 		place(b, 1, radius - 0.5).rotation.set(rand() * 0.6, rand() * 3, rand() * 0.6);
 	}
@@ -1131,6 +1475,13 @@ export function makeTrashPile(rand, radius = 7) {
 	return g;
 }
 
+/**
+ * @param {string[]} lines
+ * @param {string} [bg] CSS colour of the board
+ * @param {number} [w]
+ * @param {number} [h]
+ * @returns {THREE.Group}
+ */
 export function makeSign(lines, bg = '#2d936c', w = 6, h = 2.2) {
 	const g = new THREE.Group();
 	const tex = textTexture(lines, {
@@ -1158,6 +1509,12 @@ export function makeSign(lines, bg = '#2d936c', w = 6, h = 2.2) {
 	return g;
 }
 
+/**
+ * @param {number} w
+ * @param {number} len
+ * @param {number} h
+ * @returns {THREE.Group}
+ */
 export function makeRamp(w, len, h) {
 	const s = new THREE.Shape();
 	s.moveTo(0, 0);
@@ -1236,6 +1593,11 @@ export function makeBench() {
 	return g;
 }
 
+/**
+ * @param {() => number} rand
+ * @param {number} [r]
+ * @returns {THREE.Group}
+ */
 export function makeFlowerBed(rand, r = 2) {
 	const g = new THREE.Group();
 	g.add(cyl(r, r, 0.35, 0xb9b2a4, 0, 0.18, 0, 18));
@@ -1248,7 +1610,7 @@ export function makeFlowerBed(rand, r = 2) {
 		g.add(
 			sphere(
 				0.16,
-				cols[(rand() * cols.length) | 0],
+				/** @type {number} */ (cols[(rand() * cols.length) | 0]),
 				Math.cos(a) * d,
 				0.7,
 				Math.sin(a) * d,
@@ -1278,9 +1640,13 @@ export function makePicnicTable() {
 	return g;
 }
 
+/**
+ * @param {() => number} rand
+ * @returns {THREE.Group}
+ */
 export function makeTrashBag(rand) {
 	const g = new THREE.Group();
-	const col = [0x2b2b2b, 0x3a3d45, 0x2d5f8a, 0x40704a][(rand() * 4) | 0];
+	const col = /** @type {number} */ ([0x2b2b2b, 0x3a3d45, 0x2d5f8a, 0x40704a][(rand() * 4) | 0]);
 	const b = sphere(0.6, col, 0, 0.5, 0, 10);
 	b.scale.set(1, 0.85, 0.9);
 	g.add(b);
@@ -1303,6 +1669,10 @@ export function makeFridge() {
 	return g;
 }
 
+/**
+ * @param {number} [color]
+ * @returns {THREE.Group}
+ */
 export function makeDumpster(color = 0x3d7ea6) {
 	const g = new THREE.Group();
 	g.add(box(3.2, 1.5, 1.8, color, 0, 0.85, 0));
@@ -1328,7 +1698,12 @@ export function makeBooth() {
 	return g;
 }
 
-/** Puffy low-poly cloud. */
+/**
+ * Puffy low-poly cloud.
+ * @param {() => number} rand
+ * @param {THREE.Material} mat
+ * @returns {THREE.Group}
+ */
 export function makeCloud(rand, mat) {
 	const g = new THREE.Group();
 	const n = 4 + ((rand() * 3) | 0);
@@ -1342,11 +1717,15 @@ export function makeCloud(rand, mat) {
 	return g;
 }
 
-/** A stone statue of a heroic raccoon holding a trash can lid aloft. */
+/**
+ * A stone statue of a heroic raccoon holding a trash can lid aloft.
+ * @returns {THREE.Group}
+ */
 export function makeStatue() {
 	const stoneMat = toon(0xc9c3b5);
 	const r = makeRaccoon();
-	r.group.traverse((m) => {
+	r.group.traverse((obj) => {
+		const m = /** @type {THREE.Mesh} */ (obj);
 		if (m.isMesh && !m.userData.outline) m.material = stoneMat;
 	});
 	r.arms[0].rotation.set(-2.9, 0, 0.3);
@@ -1359,7 +1738,11 @@ export function makeStatue() {
 	return r.group;
 }
 
-/** A shiny lost treasure: a spinning gem with a halo and a beam of light. */
+/**
+ * A shiny lost treasure: a spinning gem with a halo and a beam of light.
+ * @param {number} color
+ * @returns {TreasureModel}
+ */
 export function makeTreasure(color) {
 	const g = new THREE.Group();
 	const spin = new THREE.Group();
@@ -1433,11 +1816,12 @@ export function makePicketFence() {
 	return g;
 }
 
+/** @returns {BeachBallModel} */
 export function makeBeachBall() {
 	const c = document.createElement('canvas');
 	c.width = 256;
 	c.height = 16;
-	const ctx = c.getContext('2d');
+	const ctx = /** @type {CanvasRenderingContext2D} */ (c.getContext('2d'));
 	const cols = ['#ff6b6b', '#fffbe8', '#ffd23f', '#fffbe8', '#6ec6ff', '#fffbe8'];
 	cols.forEach((col, i) => {
 		ctx.fillStyle = col;
@@ -1455,6 +1839,7 @@ export function makeBeachBall() {
 	return { group: g, ball: m };
 }
 
+/** @returns {PigeonModel} */
 export function makePigeon() {
 	const g = new THREE.Group();
 	const body = sphere(0.22, 0x8a8f9c, 0, 0.25, 0, 8);
@@ -1465,6 +1850,7 @@ export function makePigeon() {
 	const beak = cone(0.03, 0.1, 0x2b2d33, 0, 0.44, 0.33, 4);
 	beak.rotation.x = Math.PI / 2;
 	g.add(beak);
+	/** @type {THREE.Group[]} */
 	const wings = [];
 	for (const s of [1, -1]) {
 		const w = new THREE.Group();
@@ -1480,6 +1866,7 @@ export function makePigeon() {
 // Citizens: chibi critters with big heads and shiny eyes
 // ---------------------------------------------------------------------------
 
+/** @type {Record<CritterSpecies, CritterSpec>} */
 const CRITTER_SPECIES = {
 	kitten: {
 		colors: [0xffa65c, 0x8a8f99, 0x3a3d45, 0xf4efe6, 0xd9a06b],
@@ -1499,11 +1886,20 @@ const CRITTER_SPECIES = {
 	mole: { folk: true, colors: [0x6b6470], word: ['MY MAIL!', 'SIGN HERE!', 'OOF!'] },
 	pig: { folk: true, colors: [0xffb3c1], word: ['MY BUNS!', 'OINK!', 'HEY!'] },
 };
-export const CRITTER_WORDS = Object.fromEntries(
-	Object.entries(CRITTER_SPECIES).map(([k, v]) => [k, v.word]),
+/** What each species shouts when the truck gets too close. */
+export const CRITTER_WORDS = /** @type {Record<CritterSpecies, string[]>} */ (
+	Object.fromEntries(Object.entries(CRITTER_SPECIES).map(([k, v]) => [k, v.word]))
 );
 
-function cuteEyes(head, r, spread, y, z, scale = 1) {
+/**
+ * @param {THREE.Object3D} head
+ * @param {number} _r head radius (unused)
+ * @param {number} spread
+ * @param {number} y
+ * @param {number} z
+ * @param {number} [scale]
+ */
+function cuteEyes(head, _r, spread, y, z, scale = 1) {
 	for (const s of [1, -1]) {
 		const eye = sphere(0.085 * scale, 0x1b1b22, spread * s, y, z, 12);
 		eye.scale.set(1, 1.25, 0.7);
@@ -1541,8 +1937,16 @@ function cuteEyes(head, r, spread, y, z, scale = 1) {
 	}
 }
 
-/** Big shiny eyes in blinkable groups. Returns the two eye groups. */
+/**
+ * Big shiny eyes in blinkable groups. Returns the two eye groups.
+ * @param {THREE.Object3D} head
+ * @param {number} spread
+ * @param {number} y
+ * @param {number} z
+ * @param {number} [scale]
+ */
 function blinkEyes(head, spread, y, z, scale = 1) {
+	/** @type {THREE.Group[]} */
 	const eyes = [];
 	for (const s of [1, -1]) {
 		const eye = new THREE.Group();
@@ -1573,11 +1977,14 @@ function blinkEyes(head, spread, y, z, scale = 1) {
 /**
  * A cute critter. Returns { group, body, head, tail, tailSegs, legs, ears, eyes, species }.
  * Faces +z. body is the posture pivot (hips-ish), legs hang from it.
+ * @param {CritterSpecies} species
+ * @param {() => number} rand
+ * @returns {CritterModel}
  */
 export function makeCritter(species, rand) {
 	const spec = CRITTER_SPECIES[species];
-	if (spec.folk) return makeTownsfolk(species, rand);
-	const col = spec.colors[(rand() * spec.colors.length) | 0];
+	if (spec.folk) return makeTownsfolk(/** @type {FolkSpecies} */ (species), rand);
+	const col = /** @type {number} */ (spec.colors[(rand() * spec.colors.length) | 0]);
 	const light = species === 'kitten' && col === 0x3a3d45 ? 0xf4efe6 : shade(col, 1.15);
 	const g = new THREE.Group();
 	const body = new THREE.Group();
@@ -1597,15 +2004,16 @@ export function makeCritter(species, rand) {
 	}
 
 	// Legs on hip/shoulder pivots so they can swing
+	/** @type {THREE.Group[]} */
 	const legs = [];
 	const legLen = hedgehog ? 0.16 : 0.26;
 	const legCol = hedgehog ? 0x8d6a4a : col;
-	for (const [x, z] of [
+	for (const [x, z] of /** @type {[number, number][]} */ ([
 		[0.14, 0.18],
 		[-0.14, 0.18],
 		[0.14, -0.2],
 		[-0.14, -0.2],
-	]) {
+	])) {
 		const leg = new THREE.Group();
 		leg.position.set(x, -0.02, z);
 		leg.add(cyl(0.06, 0.055, legLen, legCol, 0, -legLen / 2, 0, 8));
@@ -1633,12 +2041,22 @@ export function makeCritter(species, rand) {
 	head.add(skull);
 	const eyes = blinkEyes(head, 0.12, 0.03, 0.25);
 	const noseCol = ['puppy', 'dalmatian', 'hedgehog'].includes(species) ? 0x2b2b30 : 0xff7f9e;
+	/** @type {THREE.Object3D[]} */
 	const ears = [];
 	const tail = new THREE.Group();
 	tail.position.set(0, 0.12, -0.36);
 	body.add(tail);
+	/** @type {THREE.Group[]} */
 	const tailSegs = [];
-	// a chain of segments that curves; each segment is a child of the last
+	/**
+	 * a chain of segments that curves; each segment is a child of the last
+	 * @param {number} n
+	 * @param {number} r0
+	 * @param {number} r1
+	 * @param {number} len
+	 * @param {number} color
+	 * @param {number} bend
+	 */
 	const chain = (n, r0, r1, len, color, bend) => {
 		let parent = tail;
 		for (let i = 0; i < n; i++) {
@@ -1707,13 +2125,13 @@ export function makeCritter(species, rand) {
 		tail.rotation.x = -0.5;
 		chain(2, 0.05, 0.04, 0.14, col, 0.25);
 		if (species === 'dalmatian') {
-			for (const [x, y, z, r] of [
+			for (const [x, y, z, r] of /** @type {[number, number, number, number][]} */ ([
 				[0.16, 0.22, -0.1, 0.07],
 				[-0.14, 0.2, -0.24, 0.06],
 				[0.05, 0.3, 0.04, 0.05],
 				[-0.2, 0.08, 0.08, 0.05],
 				[0.2, 0.0, -0.25, 0.05],
-			])
+			]))
 				body.add(sphere(r, 0x2b2b30, x, y, z, 6));
 			head.add(sphere(0.055, 0x2b2b30, 0.15, 0.18, 0.18, 6));
 			const collar = cyl(0.17, 0.17, 0.05, 0xe63946, 0, 0.27, 0.22, 14);
@@ -1744,7 +2162,8 @@ export function makeCritter(species, rand) {
 		}
 		tail.add(sphere(0.11, 0xffffff, 0, 0, -0.03, 10));
 		// big back feet
-		for (const l of legs.slice(2)) l.children[1].scale.set(1.2, 0.75, 1.8);
+		for (const l of legs.slice(2))
+			/** @type {THREE.Object3D} */ (l.children[1]).scale.set(1.2, 0.75, 1.8);
 	} else if (hedgehog) {
 		// spiky dome over the back
 		const spikeCol = 0x6b4a2f;
@@ -1752,7 +2171,7 @@ export function makeCritter(species, rand) {
 		dome.scale.set(1.05, 0.9, 1.3);
 		body.add(dome);
 		const ico = new THREE.IcosahedronGeometry(1, 1);
-		const pos = ico.attributes.position;
+		const pos = /** @type {THREE.BufferAttribute} */ (ico.attributes.position);
 		const seen = new Set();
 		for (let i = 0; i < pos.count; i++) {
 			const v = new THREE.Vector3().fromBufferAttribute(pos, i);
@@ -1812,7 +2231,10 @@ export function makeCritter(species, rand) {
 	};
 }
 
-/** A cute (but deeply unbothered) goose. Returns { group, neck, body }. */
+/**
+ * A cute (but deeply unbothered) goose. Returns { group, neck, body }.
+ * @returns {GooseModel}
+ */
 export function makeGoose() {
 	const g = new THREE.Group();
 	const body = new THREE.Group();
@@ -1866,6 +2288,12 @@ export function makeGoose() {
 // Buildings for the special blocks
 // ---------------------------------------------------------------------------
 
+/**
+ * @param {string[]} lines
+ * @param {number} w
+ * @param {number} h
+ * @param {TextOptions} opts
+ */
 function signPlane(lines, w, h, opts) {
 	const tex = textTexture(lines, { w: 1024, h: Math.round((1024 * h) / w), ...opts });
 	return new THREE.Mesh(
@@ -1874,6 +2302,16 @@ function signPlane(lines, w, h, opts) {
 	);
 }
 
+/**
+ * @param {THREE.Group} g
+ * @param {number} n
+ * @param {number} x0
+ * @param {number} dx
+ * @param {number} y
+ * @param {number} z
+ * @param {number} [w]
+ * @param {number} [h]
+ */
 function windowRow(g, n, x0, dx, y, z, w = 1.4, h = 1.3) {
 	for (let i = 0; i < n; i++) {
 		g.add(box(w + 0.2, h + 0.2, 0.12, 0xffffff, x0 + i * dx, y, z));
@@ -2006,7 +2444,7 @@ export function makeSchoolBus() {
 			font: 'bold 110px sans-serif',
 		}),
 	);
-	g.children[g.children.length - 1].position.set(0, 3.15, 4.27);
+	/** @type {THREE.Object3D} */ (g.children[g.children.length - 1]).position.set(0, 3.15, 4.27);
 	for (const z of [3.2, -2.8])
 		for (const s of [1.25, -1.25]) {
 			const w = cyl(0.55, 0.55, 0.4, 0x2a2a2e, s, 0.55, z, 14);
@@ -2023,12 +2461,12 @@ export function makePlayground() {
 	const g = new THREE.Group();
 	// slide
 	g.add(box(1.6, 0.15, 1.6, 0xd9534f, 0, 2.4, 0));
-	for (const [x, z] of [
+	for (const [x, z] of /** @type {[number, number][]} */ ([
 		[0.7, 0.7],
 		[-0.7, 0.7],
 		[0.7, -0.7],
 		[-0.7, -0.7],
-	])
+	]))
 		g.add(cyl(0.07, 0.07, 2.4, 0x3d7ea6, x, 1.2, z, 6));
 	const slide = box(0.9, 0.1, 3.6, 0xffc21a, 0, 1.25, 2.3);
 	slide.rotation.x = 0.68;
@@ -2042,7 +2480,7 @@ export function makePlayground() {
 		g.add(leg);
 	}
 	g.add(cyl(0.08, 0.08, 3.4, 0x2d936c, sx, 3.25, 0, 6));
-	g.children[g.children.length - 1].rotation.z = Math.PI / 2;
+	/** @type {THREE.Object3D} */ (g.children[g.children.length - 1]).rotation.z = Math.PI / 2;
 	for (const s of [-0.7, 0.7]) {
 		g.add(cyl(0.02, 0.02, 2.3, 0x9aa0a8, sx + s - 0.25, 2.1, 0, 4));
 		g.add(cyl(0.02, 0.02, 2.3, 0x9aa0a8, sx + s + 0.25, 2.1, 0, 4));
@@ -2079,7 +2517,7 @@ export function makeFirehouse() {
 	g.add(box(3, 12, 3, shade(RED, 0.9), 9.5, 6, -3.5));
 	g.add(box(3.4, 0.4, 3.4, 0xfffbe8, 9.5, 12.2, -3.5));
 	g.add(cone(2.2, 1.6, 0x2b2d33, 9.5, 13.2, -3.5, 4));
-	g.children[g.children.length - 1].rotation.y = Math.PI / 4;
+	/** @type {THREE.Object3D} */ (g.children[g.children.length - 1]).rotation.y = Math.PI / 4;
 	g.add(cyl(0.45, 0.5, 0.6, 0xe0e3e8, -6, 7.7, -2, 12));
 	return g;
 }
@@ -2121,7 +2559,7 @@ export function makeShed() {
 			font: 'bold 120px "Trebuchet MS", sans-serif',
 		}),
 	);
-	g.children[g.children.length - 1].position.set(0, 2.4, 1.56);
+	/** @type {THREE.Object3D} */ (g.children[g.children.length - 1]).position.set(0, 2.4, 1.56);
 	return g;
 }
 
@@ -2204,13 +2642,14 @@ export function makeCarrots() {
 	return g;
 }
 
+/** @type {THREE.CanvasTexture | null} */
 let chainTex = null;
 /** One 3-wide section of chain-link fence (runs along x), with a post at -x. */
 export function makeChainFence() {
 	if (!chainTex) {
 		const c = document.createElement('canvas');
 		c.width = c.height = 64;
-		const g = c.getContext('2d');
+		const g = /** @type {CanvasRenderingContext2D} */ (c.getContext('2d'));
 		g.strokeStyle = '#d5d9df';
 		g.lineWidth = 3;
 		g.beginPath();
@@ -2251,6 +2690,7 @@ export function makeChainFence() {
 // Townsfolk: anthropomorphic neighbors on two legs. Faces +z, feet at y = 0.
 // Returns the same shape as makeCritter plus { arms, biped: true }.
 // ---------------------------------------------------------------------------
+/** @type {Record<FolkSpecies, FolkSpec>} */
 const FOLK = {
 	bear: {
 		top: 0x3d7ea6,
@@ -2310,10 +2750,15 @@ const FOLK = {
 	},
 };
 
+/**
+ * @param {FolkSpecies} kind
+ * @param {() => number} rand
+ * @returns {CritterModel}
+ */
 export function makeTownsfolk(kind, rand) {
 	const spec = CRITTER_SPECIES[kind];
 	const F = FOLK[kind];
-	const fur = spec.colors[(rand() * spec.colors.length) | 0];
+	const fur = /** @type {number} */ (spec.colors[(rand() * spec.colors.length) | 0]);
 	const g = new THREE.Group();
 	const body = new THREE.Group();
 	body.position.y = 0.62;
@@ -2321,6 +2766,7 @@ export function makeTownsfolk(kind, rand) {
 	const G = F.girth;
 
 	// Legs from the hips, with shoes
+	/** @type {THREE.Group[]} */
 	const legs = [];
 	for (const s of [1, -1]) {
 		const leg = new THREE.Group();
@@ -2347,6 +2793,7 @@ export function makeTownsfolk(kind, rand) {
 		}
 	}
 	// Arms from the shoulders, with paws
+	/** @type {THREE.Group[]} */
 	const arms = [];
 	for (const s of [1, -1]) {
 		const arm = new THREE.Group();
@@ -2368,9 +2815,10 @@ export function makeTownsfolk(kind, rand) {
 	const skull = sphere(0.33, fur, 0, 0, 0, 18);
 	skull.scale.set(frog ? 1.25 : 1.05, frog ? 0.8 : 0.95, 0.95);
 	head.add(skull);
+	/** @type {THREE.Object3D[]} */
 	const ears = [];
 	let eyes;
-	const muzzle = (col, z = 0.24, w = 1.25) => {
+	const muzzle = (/** @type {number} */ col, z = 0.24, w = 1.25) => {
 		const m = sphere(0.12, col, 0, -0.1, z, 10);
 		m.scale.set(w, 0.78, 0.9);
 		head.add(m);
@@ -2378,6 +2826,7 @@ export function makeTownsfolk(kind, rand) {
 	const tail = new THREE.Group();
 	tail.position.set(0, 0.12, -0.3);
 	body.add(tail);
+	/** @type {THREE.Group[]} */
 	const tailSegs = [];
 
 	if (kind === 'bear') {
@@ -2452,8 +2901,10 @@ export function makeTownsfolk(kind, rand) {
 			lobe.scale.set(1.2, 0.8, 0.6);
 			head.add(lobe);
 		}
-		arms[1].add(box(0.2, 0.18, 0.1, 0xd9534f, 0, -0.62, 0.04));
-		arms[1].add(cyl(0.015, 0.015, 0.16, 0x2b2d33, 0, -0.5, 0.04, 4));
+		/** @type {THREE.Group} */ (arms[1]).add(box(0.2, 0.18, 0.1, 0xd9534f, 0, -0.62, 0.04));
+		/** @type {THREE.Group} */ (arms[1]).add(
+			cyl(0.015, 0.015, 0.16, 0x2b2d33, 0, -0.5, 0.04, 4),
+		);
 		tail.add(sphere(0.1, 0xffffff, 0, -0.1, -0.06, 8));
 	} else if (frog) {
 		// big mouth, eyes on top, cap, backpack
@@ -2502,7 +2953,9 @@ export function makeTownsfolk(kind, rand) {
 		// grey bun, cardigan buttons, and a cane
 		head.add(sphere(0.12, 0xd5d9df, 0, 0.3, -0.12, 10));
 		for (let i = 0; i < 3; i++) body.add(sphere(0.025, 0xffd23f, 0, 0.5 - i * 0.15, 0.32, 6));
-		arms[0].add(cyl(0.025, 0.025, 0.85, 0x8e5b3d, 0, -0.85, 0.08, 6));
+		/** @type {THREE.Group} */ (arms[0]).add(
+			cyl(0.025, 0.025, 0.85, 0x8e5b3d, 0, -0.85, 0.08, 6),
+		);
 		tail.add(sphere(0.08, fur, 0, 0, -0.02, 8));
 	} else if (kind === 'mole') {
 		// pink star nose, tiny eyes, mail cap and bag
@@ -2524,7 +2977,10 @@ export function makeTownsfolk(kind, rand) {
 		const strap = box(0.05, 0.85, 0.04, 0x6b4430, 0.05, 0.42, 0.3 * G);
 		strap.rotation.z = 0.7;
 		body.add(strap);
-		for (const s of [1, -1]) arms[s > 0 ? 0 : 1].children[1].scale.set(1.5, 0.8, 1.2); // digging paws
+		for (const s of [1, -1]) {
+			const paw = /** @type {THREE.Group} */ (arms[s > 0 ? 0 : 1]).children[1];
+			/** @type {THREE.Object3D} */ (paw).scale.set(1.5, 0.8, 1.2); // digging paws
+		}
 	} else if (kind === 'pig') {
 		const snout = cyl(0.11, 0.12, 0.08, F.light, 0, -0.06, 0.32, 14);
 		snout.rotation.x = Math.PI / 2;
@@ -2545,7 +3001,7 @@ export function makeTownsfolk(kind, rand) {
 		body.add(box(0.42, 0.55, 0.04, 0xffffff, 0, 0.26, 0.32 * G));
 		const bread = cyl(0.06, 0.06, 0.7, 0xd9a05b, 0, -0.35, 0.14, 8);
 		bread.rotation.x = 1.2;
-		arms[1].add(bread);
+		/** @type {THREE.Group} */ (arms[1]).add(bread);
 		// curly tail
 		let parent = tail;
 		for (let i = 0; i < 4; i++) {
@@ -2569,7 +3025,7 @@ export function makeTownsfolk(kind, rand) {
 		legs,
 		arms,
 		ears,
-		eyes,
+		eyes: /** @type {THREE.Group[]} */ (eyes),
 		species: kind,
 		baseY: 0.62,
 		biped: true,

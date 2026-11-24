@@ -1,9 +1,38 @@
 // Tiny synthesized sound kit + a bouncy background tune. No audio files needed.
 
+/**
+ * The engine drone's nodes, kept so `setEngine` can retune them.
+ * @typedef {object} EngineVoice
+ * @property {OscillatorNode} osc
+ * @property {BiquadFilterNode} filt
+ * @property {GainNode} gain
+ * @property {OscillatorNode} lfo
+ */
+
+/**
+ * @typedef {object} ToneOptions
+ * @property {OscillatorType} [type]
+ * @property {number} [vol]
+ * @property {number} [slide] Hz to glide by over the note
+ * @property {number} [delay] seconds from now
+ * @property {AudioNode | undefined} [dest] defaults to the sfx bus
+ */
+
+/**
+ * @typedef {object} NoiseOptions
+ * @property {number} [vol]
+ * @property {number} [freq]
+ * @property {number} [q]
+ * @property {number} [delay] seconds from now
+ * @property {BiquadFilterType} [type]
+ */
+
 class Audio {
 	constructor() {
+		/** @type {AudioContext | null} */
 		this.ctx = null;
 		this.muted = false;
+		/** @type {EngineVoice | null} */
 		this.engine = null;
 		this.musicStep = 0;
 		this.nextNoteTime = 0;
@@ -11,7 +40,11 @@ class Audio {
 
 	init() {
 		if (this.ctx) return;
-		const AC = window.AudioContext || window.webkitAudioContext;
+		const AC =
+			window.AudioContext ||
+			/** @type {{ webkitAudioContext?: typeof AudioContext }} */ (
+				/** @type {unknown} */ (window)
+			).webkitAudioContext;
 		if (!AC) return;
 		this.ctx = new AC();
 		this.master = this.ctx.createGain();
@@ -54,9 +87,14 @@ class Audio {
 		return this.muted;
 	}
 
+	/**
+	 * @param {number} speed
+	 * @param {number} throttle
+	 * @param {boolean} running
+	 */
 	setEngine(speed, throttle, running) {
 		if (!this.engine) return;
-		const t = this.ctx.currentTime;
+		const t = /** @type {AudioContext} */ (this.ctx).currentTime;
 		const s = Math.abs(speed);
 		this.engine.osc.frequency.setTargetAtTime(38 + s * 2.6 + throttle * 10, t, 0.1);
 		this.engine.lfo.frequency.setTargetAtTime(7 + s * 0.6, t, 0.1);
@@ -65,6 +103,11 @@ class Audio {
 	}
 
 	// --- helpers ---
+	/**
+	 * @param {number} freq
+	 * @param {number} dur
+	 * @param {ToneOptions} [opts]
+	 */
 	tone(freq, dur, { type = 'square', vol = 0.2, slide = 0, delay = 0, dest } = {}) {
 		if (!this.ctx) return;
 		const t = this.ctx.currentTime + delay;
@@ -75,11 +118,15 @@ class Audio {
 		const g = this.ctx.createGain();
 		g.gain.setValueAtTime(vol, t);
 		g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-		o.connect(g).connect(dest || this.sfx);
+		o.connect(g).connect(/** @type {AudioNode} */ (dest || this.sfx));
 		o.start(t);
 		o.stop(t + dur + 0.02);
 	}
 
+	/**
+	 * @param {number} dur
+	 * @param {NoiseOptions} [opts]
+	 */
 	noise(dur, { vol = 0.3, freq = 1200, q = 1, delay = 0, type = 'bandpass' } = {}) {
 		if (!this.ctx) return;
 		const t = this.ctx.currentTime + delay;
@@ -96,7 +143,9 @@ class Audio {
 		const g = this.ctx.createGain();
 		g.gain.setValueAtTime(vol, t);
 		g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-		src.connect(f).connect(g).connect(this.sfx);
+		src.connect(f)
+			.connect(g)
+			.connect(/** @type {AudioNode} */ (this.sfx));
 		src.start(t);
 	}
 
@@ -122,7 +171,11 @@ class Audio {
 	collect(n = 1) {
 		const notes = [523, 659, 784, 1047, 1319];
 		for (let i = 0; i < Math.min(5, n + 1); i++)
-			this.tone(notes[i], 0.12, { type: 'square', vol: 0.09, delay: i * 0.07 });
+			this.tone(/** @type {number} */ (notes[i]), 0.12, {
+				type: 'square',
+				vol: 0.09,
+				delay: i * 0.07,
+			});
 	}
 	golden() {
 		[784, 988, 1175, 1568, 1976].forEach((f, i) =>
@@ -203,9 +256,11 @@ class Audio {
 		for (let i = 0; i < 5; i++)
 			this.noise(0.05, { vol: 0.12, freq: 1800, q: 2, delay: i * 0.06 });
 	}
+	/** @param {number} level */
 	chargeUp(level) {
 		this.tone(500 + level * 250, 0.12, { type: 'triangle', vol: 0.12, slide: 300 });
 	}
+	/** @param {number} level */
 	boost(level) {
 		this.noise(0.6, { vol: 0.3, freq: 900, q: 0.7, type: 'bandpass' });
 		this.tone(180, 0.5, { type: 'sawtooth', vol: 0.12, slide: 400 + level * 200 });
@@ -223,6 +278,7 @@ class Audio {
 	}
 
 	// --- music: a little loop scheduled ahead of time ---
+	/** @param {boolean} playing */
 	updateMusic(playing) {
 		if (!this.ctx || !playing) return;
 		const bpm = 132;
@@ -233,11 +289,11 @@ class Audio {
 			72, 0, 76, 79, 76, 0, 74, 72, 69, 0, 72, 74, 76, 0, 0, 0, 77, 0, 76, 74, 72, 0, 69, 72,
 			74, 0, 79, 0, 76, 74, 72, 0,
 		];
-		const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
+		const mtof = (/** @type {number} */ m) => 440 * Math.pow(2, (m - 69) / 12);
 		while (this.nextNoteTime < this.ctx.currentTime + 0.2) {
 			const s = this.musicStep;
 			const delay = Math.max(0, this.nextNoteTime - this.ctx.currentTime);
-			const b = bass[s % 16];
+			const b = /** @type {number} */ (bass[s % 16]);
 			this.tone(mtof(b), step * 0.9, { type: 'triangle', vol: 0.5, delay, dest: this.music });
 			const m = mel[s % 32];
 			if (m)
@@ -249,27 +305,33 @@ class Audio {
 				});
 			if (s % 4 === 2) {
 				// hi-hat-ish tick
-				this.noiseTo(this.music, 0.04, delay);
+				this.noiseTo(/** @type {GainNode} */ (this.music), 0.04, delay);
 			}
 			this.musicStep++;
 			this.nextNoteTime += step;
 		}
 	}
 
+	/**
+	 * @param {AudioNode} dest
+	 * @param {number} dur
+	 * @param {number} delay
+	 */
 	noiseTo(dest, dur, delay) {
-		const t = this.ctx.currentTime + delay;
+		const ctx = /** @type {AudioContext} */ (this.ctx);
+		const t = ctx.currentTime + delay;
 		if (!this._hat) {
-			const len = (this.ctx.sampleRate * 0.05) | 0;
-			this._hat = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+			const len = (ctx.sampleRate * 0.05) | 0;
+			this._hat = ctx.createBuffer(1, len, ctx.sampleRate);
 			const d = this._hat.getChannelData(0);
 			for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
 		}
-		const src = this.ctx.createBufferSource();
+		const src = ctx.createBufferSource();
 		src.buffer = this._hat;
-		const f = this.ctx.createBiquadFilter();
+		const f = ctx.createBiquadFilter();
 		f.type = 'highpass';
 		f.frequency.value = 6000;
-		const g = this.ctx.createGain();
+		const g = ctx.createGain();
 		g.gain.setValueAtTime(0.25, t);
 		g.gain.exponentialRampToValueAtTime(0.001, t + dur);
 		src.connect(f).connect(g).connect(dest);

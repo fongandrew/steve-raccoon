@@ -47,6 +47,211 @@ import {
 } from './models.js';
 import { PropBatch } from './props.js';
 
+/** @typedef {import('./models.js').CanModel} CanModel */
+/** @typedef {import('./models.js').MarkerModel} MarkerModel */
+/** @typedef {import('./models.js').SeagullModel} SeagullModel */
+/** @typedef {import('./models.js').CritterSpecies} CritterSpecies */
+
+/**
+ * The floating ring + arrow over a can or dumpster that wants collecting.
+ * @typedef {MarkerModel} Marker
+ */
+
+/**
+ * Static axis-aligned collider.
+ * @typedef {object} Box
+ * @property {number} minX
+ * @property {number} maxX
+ * @property {number} minZ
+ * @property {number} maxZ
+ * @property {boolean} [off] ignored while true (a dumpster's box while it is being lifted)
+ */
+
+/**
+ * Static circle collider: ponds, fountains, flower beds, poles.
+ * @typedef {object} PlainCircle
+ * @property {number} x
+ * @property {number} z
+ * @property {number} r
+ * @property {boolean} [tree] rustles when bumped
+ * @property {undefined} [prop] only tree circles have one
+ * @property {undefined} [dmg] only tree circles take damage
+ * @property {boolean} [off] ignored while true
+ * @property {number} [shook] shift time of the last leaf burst (set by truck.js)
+ */
+
+/**
+ * The trunk of a tree that can be knocked down.
+ * @typedef {object} TreeCircle
+ * @property {number} x
+ * @property {number} z
+ * @property {number} r
+ * @property {boolean} tree
+ * @property {BatchProp} prop the tree itself
+ * @property {number} dmg damage so far; enough of it fells the tree
+ * @property {boolean} [off] true once the tree is down, until it resets
+ * @property {number} [shook] shift time of the last leaf burst (set by truck.js)
+ */
+
+/**
+ * Static circle collider. `if (c.prop)` narrows it to a `TreeCircle`.
+ * @typedef {PlainCircle | TreeCircle} Circle
+ */
+
+/**
+ * @typedef {'lamp' | 'cone' | 'mailbox' | 'fence' | 'flamingo' | 'gnome' | 'tree' | 'hydrant' |
+ *   'sign' | 'bench' | 'table' | 'chainlink' | 'bag' | 'tire' | 'veggie' | 'sunflower' |
+ *   'scarecrow'} PropKind
+ */
+
+/**
+ * A knockable prop. It is drawn either by its own `mesh` or as instance
+ * `index` of a shared `batch`. smash.js owns everything from `knocked` down.
+ * @typedef {object} Prop
+ * @property {PropKind} kind
+ * @property {number} x home position
+ * @property {number} z
+ * @property {number} r collision radius
+ * @property {THREE.Vector3} home
+ * @property {THREE.Quaternion} homeQuat
+ * @property {THREE.Vector3} pos where it is now
+ * @property {THREE.Quaternion} quat
+ * @property {THREE.Object3D} [mesh] own mesh (absent for batched props)
+ * @property {PropBatch} [batch] shared batch (absent for props with a mesh)
+ * @property {number} [index] instance index in `batch`
+ * @property {number} [scale] instance scale (trees)
+ * @property {TreeCircle} [circle] a tree's trunk collider
+ * @property {boolean} knocked
+ * @property {'idle' | 'fly' | 'tip' | 'rest' | 'gone'} state
+ * @property {number} timer seconds since it was knocked
+ * @property {boolean} landed a tipping prop has hit the ground
+ * @property {boolean} hidden shattered: not drawn until it resets
+ * @property {THREE.Vector3} vel
+ * @property {THREE.Vector3} spin
+ * @property {number} restA direction a flying prop ends up lying in
+ * @property {number} restLift how far off the ground it rests
+ * @property {THREE.Vector3} [tipDir] set when it starts to tip
+ * @property {THREE.Vector3} [tipAxis]
+ * @property {number} tipA tip angle
+ * @property {number} tipW tip angular velocity
+ * @property {number} geyser seconds of hydrant geyser left
+ * @property {boolean} washed the geyser has already given its free car wash
+ */
+
+/** @typedef {Prop & { batch: PropBatch, index: number }} BatchProp */
+
+/**
+ * A house and the trash can it puts out at the curb.
+ * @typedef {object} House
+ * @property {number} x
+ * @property {number} z
+ * @property {number} canX where the can stands
+ * @property {number} canZ
+ * @property {number} facing radians; 0 faces +z
+ * @property {number} roofCol
+ * @property {CanModel} can
+ * @property {CanModel} goldCan
+ * @property {Marker} marker
+ * @property {Marker} goldMarker
+ * @property {string} name e.g. "the Higginss"
+ * @property {string} street
+ * @property {'idle' | 'out' | 'grabbing' | 'done'} state
+ * @property {boolean} golden
+ * @property {number} cooldown seconds before it can put a can out again
+ * @property {number} hideT seconds an emptied can stays out before it is hidden
+ * @property {boolean} fullWarned the "truck full" warning has been shown for this visit
+ */
+
+/**
+ * A dumpster the front loader can lift.
+ * @typedef {object} Bin
+ * @property {number} x
+ * @property {number} z
+ * @property {number} facing
+ * @property {THREE.Group} group
+ * @property {Box} collider
+ * @property {Marker} marker
+ * @property {'idle' | 'out' | 'lifting'} state
+ * @property {number} cooldown
+ * @property {THREE.Vector3} home where `group` sits when it is not being lifted
+ * @property {boolean} hinted the "line up with it" hint has been shown
+ */
+
+/**
+ * A jump ramp: starts at (x, z) and rises along (dirX, dirZ).
+ * @typedef {object} Ramp
+ * @property {number} x
+ * @property {number} z
+ * @property {number} dirX
+ * @property {number} dirZ
+ * @property {number} w
+ * @property {number} len
+ * @property {number} h
+ */
+
+/**
+ * @typedef {'houses' | 'park' | 'dump' | 'plaza' | 'bar' | 'school' | 'firehouse' | 'garden'
+ * } BlockType
+ */
+
+/**
+ * @typedef {object} Block
+ * @property {number} cx
+ * @property {number} cz
+ * @property {BlockType} type
+ */
+
+/**
+ * The unload pad and the trash pile beside it.
+ * @typedef {object} Dump
+ * @property {number} x centre of the unload pad
+ * @property {number} z
+ * @property {number} r
+ * @property {THREE.Mesh} pad
+ * @property {THREE.Mesh} padRing
+ * @property {number} pileX
+ * @property {number} pileZ
+ * @property {number} pileR
+ * @property {number} pileH
+ * @property {number} pileY
+ */
+
+/**
+ * A bush the truck can drive through.
+ * @typedef {object} Bush
+ * @property {number} x
+ * @property {number} z
+ * @property {number} t shift time of its last leaf burst
+ */
+
+/**
+ * One painted road marking: [x, z, sizeX, sizeZ].
+ * @typedef {[number, number, number, number]} Mark
+ */
+
+/**
+ * Everything `buildWorld` makes that the game needs to find again.
+ * @typedef {object} World
+ * @property {Box[]} boxes static AABB colliders
+ * @property {Circle[]} circles static circle colliders
+ * @property {House[]} houses
+ * @property {Prop[]} props knockable props
+ * @property {Ramp[]} ramps
+ * @property {Block[]} blocks
+ * @property {Dump} dump
+ * @property {SeagullModel[]} seagulls each group's `userData` holds its orbit
+ * @property {THREE.Group[]} ducks each has `userData.duck = { cx, cz }`
+ * @property {{ x: number, z: number, y: number }[]} fountains
+ * @property {Bush[]} bushes drive-through bushes (leaf bursts)
+ * @property {[number, number][]} balls beach ball spawn spots, as [x, z]
+ * @property {{ x: number, z: number, r: number }[]} pigeonSpots
+ * @property {Bin[]} bins dumpsters the front loader can lift
+ * @property {{ species: CritterSpecies, x: number, z: number }[]} critterSpots
+ *   special spawn points for citizens (the firehouse dog)
+ * @property {THREE.Group[]} flags
+ * @property {Record<string, PropBatch>} batches instanced batches, by name
+ */
+
 export const N = 5; // blocks per side
 export const BLOCK = 40;
 export const ROAD = 14;
@@ -59,7 +264,11 @@ export const WALK_Y = 0.2;
 export const LAWN_Y = 0.24;
 const LAWN_HALF = (BLOCK - 3) / 2;
 
-/** Mulberry32 seeded RNG so the town is the same every time. */
+/**
+ * Mulberry32 seeded RNG so the town is the same every time.
+ * @param {number} seed
+ * @returns {() => number}
+ */
 export function rng(seed) {
 	return () => {
 		seed |= 0;
@@ -70,10 +279,15 @@ export function rng(seed) {
 	};
 }
 
-export const roadCenter = (i) => -HALF + i * PITCH;
-export const blockCenter = (i) => -HALF + i * PITCH + PITCH / 2;
+export const roadCenter = (/** @type {number} */ i) => -HALF + i * PITCH;
+export const blockCenter = (/** @type {number} */ i) => -HALF + i * PITCH + PITCH / 2;
 
-/** Height of the road / sidewalk / lawn at a point (ignores ramps). */
+/**
+ * Height of the road / sidewalk / lawn at a point (ignores ramps).
+ * @param {number} x
+ * @param {number} z
+ * @returns {number}
+ */
 export function surfaceHeight(x, z) {
 	const i = Math.floor((x + HALF) / PITCH);
 	const j = Math.floor((z + HALF) / PITCH);
@@ -85,9 +299,15 @@ export function surfaceHeight(x, z) {
 	return WALK_Y;
 }
 
+/**
+ * Builds the whole town into `scene`. Seeded, so it is the same town every time.
+ * @param {THREE.Scene} scene
+ * @returns {World}
+ */
 export function buildWorld(scene) {
 	const rand = rng(1337);
 	const S = new THREE.Group(); // static stuff, batched at the end
+	/** @type {World} */
 	const world = {
 		boxes: [], // static AABB colliders {minX,maxX,minZ,maxZ}
 		circles: [], // static circle colliders {x,z,r}
@@ -95,7 +315,8 @@ export function buildWorld(scene) {
 		props: [], // knockable props
 		ramps: [], // {x,z,dirX,dirZ,w,len,h}
 		blocks: [],
-		dump: null,
+		// buildDump fills this in before buildWorld returns
+		dump: /** @type {Dump} */ (/** @type {unknown} */ (null)),
 		seagulls: [],
 		ducks: [],
 		fountains: [],
@@ -105,18 +326,18 @@ export function buildWorld(scene) {
 		bins: [], // dumpsters the front loader can lift
 		critterSpots: [], // special spawn points for citizens (the firehouse dog)
 		flags: [],
-	};
-	world.batches = {
-		lamp: new PropBatch(scene, makeLampPost(), 140),
-		fence: new PropBatch(scene, makePicketFence(), 900),
-		flamingo: new PropBatch(scene, makeFlamingo(), 120),
-		gnome: new PropBatch(scene, makeGnome(), 120),
-		cabbage: new PropBatch(scene, makeCabbage(), 40),
-		pumpkin: new PropBatch(scene, makePumpkin(), 40),
-		carrots: new PropBatch(scene, makeCarrots(), 40),
-		sunflower: new PropBatch(scene, makeSunflower(), 40),
-		...treeBatches(scene),
-		chainlink: new PropBatch(scene, makeChainFence(), 60),
+		batches: {
+			lamp: new PropBatch(scene, makeLampPost(), 140),
+			fence: new PropBatch(scene, makePicketFence(), 900),
+			flamingo: new PropBatch(scene, makeFlamingo(), 120),
+			gnome: new PropBatch(scene, makeGnome(), 120),
+			cabbage: new PropBatch(scene, makeCabbage(), 40),
+			pumpkin: new PropBatch(scene, makePumpkin(), 40),
+			carrots: new PropBatch(scene, makeCarrots(), 40),
+			sunflower: new PropBatch(scene, makeSunflower(), 40),
+			...treeBatches(scene),
+			chainlink: new PropBatch(scene, makeChainFence(), 60),
+		},
 	};
 
 	// Grass all around, one asphalt slab for every road (no z-fighting)
@@ -129,16 +350,23 @@ export function buildWorld(scene) {
 	asphalt.castShadow = false;
 	S.add(asphalt);
 	// Curb strip around the outside of town
-	for (const [w, d, x, z] of [
+	for (const [w, d, x, z] of /** @type {[number, number, number, number][]} */ ([
 		[asphaltSize + 1, 0.5, 0, asphaltSize / 2],
 		[asphaltSize + 1, 0.5, 0, -asphaltSize / 2],
 		[0.5, asphaltSize + 1, asphaltSize / 2, 0],
 		[0.5, asphaltSize + 1, -asphaltSize / 2, 0],
-	])
+	]))
 		S.add(box(w, WALK_Y, d, 0xd9d4c7, x, WALK_Y / 2, z));
 
 	// Road markings (instanced): lane dashes + crosswalks
+	/** @type {Mark[]} */
 	const marks = [];
+	/**
+	 * @param {number} x
+	 * @param {number} z
+	 * @param {number} sx
+	 * @param {number} sz
+	 */
 	const markPlace = (x, z, sx, sz) => marks.push([x, z, sx, sz]);
 	for (let i = 0; i <= N; i++) {
 		const c = roadCenter(i);
@@ -153,11 +381,13 @@ export function buildWorld(scene) {
 	}
 	const dashMesh = instancedMarks(marks, 0xfff3b0);
 	scene.add(dashMesh);
+	/** @type {Mark[]} */
 	const walks = [];
 	for (let i = 0; i <= N; i++) {
 		for (let j = 0; j <= N; j++) {
 			const x0 = roadCenter(i);
 			const z0 = roadCenter(j);
+			/** @type {[number, number, boolean][]} */
 			const dirs = [
 				[1, 0, i < N],
 				[-1, 0, i > 0],
@@ -178,9 +408,10 @@ export function buildWorld(scene) {
 	scene.add(instancedMarks(walks, 0xf4f4ef));
 
 	// Block types
+	/** @type {BlockType[]} */
 	const types = [];
 	for (let i = 0; i < N * N; i++) types.push('houses');
-	const idx = (bx, bz) => bz * N + bx;
+	const idx = (/** @type {number} */ bx, /** @type {number} */ bz) => bz * N + bx;
 	types[idx(4, 0)] = 'dump';
 	types[idx(1, 1)] = 'park';
 	types[idx(3, 3)] = 'park';
@@ -226,7 +457,7 @@ export function buildWorld(scene) {
 		for (let bx = 0; bx < N; bx++) {
 			const cx = blockCenter(bx);
 			const cz = blockCenter(bz);
-			const type = types[idx(bx, bz)];
+			const type = /** @type {BlockType} */ (types[idx(bx, bz)]);
 			world.blocks.push({ cx, cz, type });
 
 			// Sidewalk slab + lawn
@@ -246,12 +477,12 @@ export function buildWorld(scene) {
 			S.add(lawn);
 
 			// Street lamps on every corner
-			for (const [sx, sz] of [
+			for (const [sx, sz] of /** @type {[number, number][]} */ ([
 				[1, 1],
 				[1, -1],
 				[-1, 1],
 				[-1, -1],
-			]) {
+			])) {
 				addBatchProp(
 					world,
 					'lamp',
@@ -277,12 +508,12 @@ export function buildWorld(scene) {
 	// Ring of trees around the edge of town + invisible walls
 	const edge = HALF + 12;
 	for (let t = -edge; t <= edge; t += 6) {
-		for (const [x, z] of [
+		for (const [x, z] of /** @type {[number, number][]} */ ([
 			[t, -edge],
 			[t, edge],
 			[-edge, t],
 			[edge, t],
-		]) {
+		])) {
 			for (let k = 0; k < 2; k++) {
 				const tree = makeTree(rand, 1.3 + rand() * 0.6);
 				const out = k * (6 + rand() * 4);
@@ -318,6 +549,10 @@ export function buildWorld(scene) {
 	return world;
 }
 
+/**
+ * @param {Mark[]} list
+ * @param {number} color
+ */
 function instancedMarks(list, color) {
 	const geo = new THREE.BoxGeometry(1, 0.02, 1);
 	const mesh = new THREE.InstancedMesh(geo, toon(color), list.length);
@@ -334,14 +569,22 @@ function instancedMarks(list, color) {
 /**
  * Merges all static meshes that share a material into one mesh each. The town
  * has thousands of little parts; this turns them into a few dozen draw calls.
+ * @param {THREE.Object3D} root
+ * @param {THREE.Scene} scene
  */
 function bakeStatic(root, scene) {
 	root.updateMatrixWorld(true);
+	/**
+	 * @type {Map<string, { mat: THREE.Material, cast: boolean, receive: boolean,
+	 *   geos: THREE.BufferGeometry[] }>}
+	 */
 	const buckets = new Map();
+	/** @type {THREE.Object3D[]} */
 	const keep = [];
-	root.traverse((o) => {
+	root.traverse((obj) => {
+		const o = /** @type {THREE.Mesh & { isInstancedMesh?: boolean }} */ (obj);
 		if (!o.isMesh) return;
-		const m = o.material;
+		const m = /** @type {THREE.MeshToonMaterial | THREE.MeshToonMaterial[]} */ (o.material);
 		if (o.isInstancedMesh || Array.isArray(m) || m.map || m.transparent) {
 			keep.push(o);
 			return;
@@ -354,7 +597,7 @@ function bakeStatic(root, scene) {
 		const key = `${m.uuid}|${o.castShadow}|${o.receiveShadow}`;
 		if (!buckets.has(key))
 			buckets.set(key, { mat: m, cast: o.castShadow, receive: o.receiveShadow, geos: [] });
-		buckets.get(key).geos.push(g);
+		/** @type {{ geos: THREE.BufferGeometry[] }} */ (buckets.get(key)).geos.push(g);
 	});
 	for (const o of keep) scene.attach(o);
 	for (const b of buckets.values()) {
@@ -366,7 +609,18 @@ function bakeStatic(root, scene) {
 	}
 }
 
+/**
+ * @param {World} world
+ * @param {PropKind} kind
+ * @param {number} x
+ * @param {number} z
+ * @param {number} r
+ * @param {number} rotY
+ * @param {number} y
+ * @returns {Prop}
+ */
 function newProp(world, kind, x, z, r, rotY, y) {
+	/** @type {Prop} */
 	const p = {
 		kind,
 		x,
@@ -381,13 +635,32 @@ function newProp(world, kind, x, z, r, rotY, y) {
 		quat: new THREE.Quaternion(),
 		vel: new THREE.Vector3(),
 		spin: new THREE.Vector3(),
+		// smash.js state, at the values it treats as "nothing has happened yet"
+		landed: false,
+		hidden: false,
+		restA: 0,
+		restLift: 0,
+		tipA: 0,
+		tipW: 0,
+		geyser: 0,
+		washed: false,
 	};
 	p.quat.copy(p.homeQuat);
 	world.props.push(p);
 	return p;
 }
 
-/** A knockable prop backed by its own mesh. */
+/**
+ * A knockable prop backed by its own mesh.
+ * @param {THREE.Scene} scene
+ * @param {World} world
+ * @param {THREE.Object3D} mesh
+ * @param {number} x
+ * @param {number} z
+ * @param {number} r
+ * @param {PropKind} kind
+ * @param {number} [rotY]
+ */
 function addProp(scene, world, mesh, x, z, r, kind, rotY = 0) {
 	const y = surfaceHeight(x, z);
 	mesh.position.set(x, y, z);
@@ -400,26 +673,49 @@ function addProp(scene, world, mesh, x, z, r, kind, rotY = 0) {
 
 const _m4 = new THREE.Matrix4();
 const _one = new THREE.Vector3(1, 1, 1);
-/** A knockable prop drawn as one instance of a shared batch. */
+/**
+ * A knockable prop drawn as one instance of a shared batch.
+ * @param {World} world
+ * @param {string} batchName key into `world.batches`
+ * @param {number} x
+ * @param {number} z
+ * @param {number} r
+ * @param {PropKind} kind
+ * @param {number} [rotY]
+ * @returns {BatchProp}
+ */
 function addBatchProp(world, batchName, x, z, r, kind, rotY = 0) {
 	const y = surfaceHeight(x, z);
 	const p = newProp(world, kind, x, z, r, rotY, y);
-	p.batch = world.batches[batchName];
+	p.batch = /** @type {PropBatch} */ (world.batches[batchName]);
 	p.index = p.batch.add();
 	p.batch.set(p.index, _m4.compose(p.pos, p.quat, _one));
-	return p;
+	return /** @type {BatchProp} */ (p);
 }
 
+/**
+ * @param {World} world
+ * @param {number} x
+ * @param {number} z
+ * @param {number} r
+ */
 const treeCircle = (world, x, z, r) => world.circles.push({ x, z, r, tree: true });
 
-/** A few tree templates (three leafy, one pine) drawn as instanced batches. */
+/**
+ * A few tree templates (three leafy, one pine) drawn as instanced batches.
+ * @param {THREE.Scene} scene
+ */
 function treeBatches(scene) {
+	/** @type {Record<string, PropBatch>} */
 	const out = {};
 	let leafy = 0;
 	let pine = false;
 	for (let seed = 1; seed < 80 && (leafy < 3 || !pine); seed++) {
 		const t = makeTree(rng(seed * 7919));
-		const isPine = t.children.some((m) => m.geometry && m.geometry.type === 'ConeGeometry');
+		const isPine = t.children.some(
+			(/** @type {THREE.Object3D & { geometry?: THREE.BufferGeometry }} */ m) =>
+				m.geometry && m.geometry.type === 'ConeGeometry',
+		);
 		if (isPine && !pine) {
 			pine = true;
 			out.tree3 = new PropBatch(scene, t, 150);
@@ -430,17 +726,38 @@ function treeBatches(scene) {
 	return out;
 }
 
-/** A tree that blocks the truck but falls over if hit hard (or often) enough. */
+/**
+ * A tree that blocks the truck but falls over if hit hard (or often) enough.
+ * @param {World} world
+ * @param {() => number} rand
+ * @param {number} x
+ * @param {number} z
+ * @param {number} scale
+ * @param {number} r
+ */
 function addTree(world, rand, x, z, scale, r) {
 	const variant = rand() < 0.22 ? 3 : (rand() * 3) | 0;
 	const p = addBatchProp(world, `tree${variant}`, x, z, r, 'tree', rand() * 6);
 	p.scale = scale;
 	p.batch.set(p.index, _m4.compose(p.pos, p.quat, new THREE.Vector3(scale, scale, scale)));
+	/** @type {TreeCircle} */
 	const circle = { x, z, r, tree: true, prop: p, dmg: 0 };
 	p.circle = circle;
 	world.circles.push(circle);
 }
 
+/**
+ * @param {THREE.Group} S static meshes, merged once the town is built
+ * @param {THREE.Scene} scene
+ * @param {World} world
+ * @param {() => number} rand
+ * @param {number} cx
+ * @param {number} cz
+ * @param {number} bx
+ * @param {number} bz
+ * @param {string[]} streetNames
+ * @param {string[]} familyNames
+ */
 function buildHouseBlock(S, scene, world, rand, cx, cz, bx, bz, streetNames, familyNames) {
 	// One house per side, facing the road.
 	const sides = [
@@ -466,6 +783,11 @@ function buildHouseBlock(S, scene, world, rand, cx, cz, bx, bz, streetNames, fam
 		// Local frame helpers: f = toward the road, p = sideways
 		const px = -s.dz;
 		const pz = s.dx;
+		/**
+		 * @param {number} fwd
+		 * @param {number} side
+		 * @returns {[number, number]}
+		 */
 		const at = (fwd, side) => [cx + s.dx * fwd + px * side, cz + s.dz * fwd + pz * side];
 
 		// Driveway beside the house + front path to the door
@@ -507,7 +829,7 @@ function buildHouseBlock(S, scene, world, rand, cx, cz, bx, bz, streetNames, fam
 				b.position.set(bx2, LAWN_Y, bz2);
 				b.rotation.y = facing;
 				S.add(b);
-				world.bushes.push({ x: bx2, z: bz2 });
+				world.bushes.push({ x: bx2, z: bz2, t: -9 });
 			}
 		}
 
@@ -553,6 +875,8 @@ function buildHouseBlock(S, scene, world, rand, cx, cz, bx, bz, streetNames, fam
 			state: 'idle', // idle | out | grabbing | done
 			golden: false,
 			cooldown: 0,
+			hideT: 0,
+			fullWarned: false,
 		});
 
 		const mb = makeMailbox(rand);
@@ -582,12 +906,12 @@ function buildHouseBlock(S, scene, world, rand, cx, cz, bx, bz, streetNames, fam
 	}
 	// Backyard: a big shade tree and a few smaller ones in the gaps
 	addTree(world, rand, cx, cz, 1.2, 1);
-	for (const [sx, sz] of [
+	for (const [sx, sz] of /** @type {[number, number][]} */ ([
 		[1, 1],
 		[1, -1],
 		[-1, 1],
 		[-1, -1],
-	]) {
+	])) {
 		if (rand() < 0.35) continue;
 		addTree(world, rand, cx + sx * 15.5, cz + sz * 15.5, 0.9 + rand() * 0.3, 0.8);
 	}
@@ -602,6 +926,14 @@ function buildHouseBlock(S, scene, world, rand, cx, cz, bx, bz, streetNames, fam
 	}
 }
 
+/**
+ * @param {THREE.Group} S static meshes, merged once the town is built
+ * @param {THREE.Scene} scene
+ * @param {World} world
+ * @param {() => number} rand
+ * @param {number} cx
+ * @param {number} cz
+ */
 function buildPark(S, scene, world, rand, cx, cz) {
 	// Ramp runs through the middle along an axis; a dirt runway crosses the park
 	const dir = rand() < 0.5 ? 1 : -1;
@@ -610,6 +942,11 @@ function buildPark(S, scene, world, rand, cx, cz) {
 	const dZ = alongX ? 0 : dir;
 	const lX = -dZ; // lateral
 	const lZ = dX;
+	/**
+	 * @param {number} u along the runway
+	 * @param {number} v across it
+	 * @returns {[number, number]}
+	 */
 	const at = (u, v) => [cx + dX * u + lX * v, cz + dZ * u + lZ * v];
 	const runway = box(
 		alongX ? BLOCK - 3 : 7,
@@ -695,10 +1032,10 @@ function buildPark(S, scene, world, rand, cx, cz) {
 		[cx + dX * 2 + lX * 8, cz + dZ * 2 + lZ * 8],
 		[cx - dX * 9 + lX * 3, cz - dZ * 9 + lZ * 3],
 	);
-	for (const [u, v] of [
+	for (const [u, v] of /** @type {[number, number][]} */ ([
 		[8, 10],
 		[-9, -10],
-	]) {
+	])) {
 		const [fx, fz] = at(u, v);
 		const bed = makeFlowerBed(rand, 2);
 		bed.position.set(fx, LAWN_Y, fz);
@@ -710,13 +1047,13 @@ function buildPark(S, scene, world, rand, cx, cz) {
 function pavingTexture() {
 	const c = document.createElement('canvas');
 	c.width = c.height = 128;
-	const g = c.getContext('2d');
+	const g = /** @type {CanvasRenderingContext2D} */ (c.getContext('2d'));
 	g.fillStyle = '#cfc6b4';
 	g.fillRect(0, 0, 128, 128);
 	const cols = ['#ece3cf', '#e6dcc6', '#f1e9d8'];
 	for (let y = 0; y < 4; y++) {
 		for (let x = 0; x < 4; x++) {
-			g.fillStyle = cols[(x * 7 + y * 3) % 3];
+			g.fillStyle = /** @type {string} */ (cols[(x * 7 + y * 3) % 3]);
 			g.fillRect(x * 32 + 2, y * 32 + 2, 28, 28);
 		}
 	}
@@ -728,6 +1065,14 @@ function pavingTexture() {
 	return tex;
 }
 
+/**
+ * @param {THREE.Group} S static meshes, merged once the town is built
+ * @param {THREE.Scene} scene
+ * @param {World} world
+ * @param {() => number} rand
+ * @param {number} cx
+ * @param {number} cz
+ */
 function buildPlaza(S, scene, world, rand, cx, cz) {
 	const paving = new THREE.Mesh(
 		new THREE.PlaneGeometry(BLOCK - 3, BLOCK - 3),
@@ -767,12 +1112,12 @@ function buildPlaza(S, scene, world, rand, cx, cz) {
 	world.pigeonSpots.push({ x: cx, z: cz, r: 11 });
 
 	// Benches facing the fountain, flower beds and trees in the corners
-	for (const [dx, dz] of [
+	for (const [dx, dz] of /** @type {[number, number][]} */ ([
 		[0, 1],
 		[0, -1],
 		[1, 0],
 		[-1, 0],
-	]) {
+	])) {
 		addProp(
 			scene,
 			world,
@@ -784,12 +1129,12 @@ function buildPlaza(S, scene, world, rand, cx, cz) {
 			Math.atan2(-dx, -dz),
 		);
 	}
-	for (const [sx, sz] of [
+	for (const [sx, sz] of /** @type {[number, number][]} */ ([
 		[1, 1],
 		[1, -1],
 		[-1, 1],
 		[-1, -1],
-	]) {
+	])) {
 		const bed = makeFlowerBed(rand, 2.6);
 		bed.position.set(cx + sx * 13, LAWN_Y, cz + sz * 13);
 		S.add(bed);
@@ -804,7 +1149,7 @@ function buildPlaza(S, scene, world, rand, cx, cz) {
 function padTexture() {
 	const c = document.createElement('canvas');
 	c.width = c.height = 512;
-	const g = c.getContext('2d');
+	const g = /** @type {CanvasRenderingContext2D} */ (c.getContext('2d'));
 	g.translate(256, 256);
 	g.fillStyle = '#ffd23f';
 	g.beginPath();
@@ -831,6 +1176,14 @@ function padTexture() {
 	return tex;
 }
 
+/**
+ * @param {THREE.Group} S static meshes, merged once the town is built
+ * @param {THREE.Scene} scene
+ * @param {World} world
+ * @param {() => number} rand
+ * @param {number} cx
+ * @param {number} cz
+ */
 function buildDump(S, scene, world, rand, cx, cz) {
 	const pile = makeTrashPile(rand, 7);
 	const px = cx + 6;
@@ -853,6 +1206,12 @@ function buildDump(S, scene, world, rand, cx, cz) {
 
 	// Chain-link fence round the back and sides, in knock-over-able sections
 	const F = 18.6;
+	/**
+	 * @param {number} x0
+	 * @param {number} z0
+	 * @param {number} x1
+	 * @param {number} z1
+	 */
 	const fence = (x0, z0, x1, z1) => {
 		const len = Math.hypot(x1 - x0, z1 - z0);
 		const n = Math.max(1, Math.round(len / 3));
@@ -877,10 +1236,10 @@ function buildDump(S, scene, world, rand, cx, cz) {
 	fence(cx + 2, cz + F, cx + F, cz + F); // south
 
 	// Dumpsters along the back fence, a little office by the gate
-	for (const [x, col] of [
+	for (const [x, col] of /** @type {[number, number][]} */ ([
 		[-11, 0x3d7ea6],
 		[-6.5, 0x2d936c],
-	]) {
+	])) {
 		const d = makeDumpster(col);
 		d.position.set(cx + x, LAWN_Y, cz - F + 1.6);
 		S.add(d);
@@ -970,22 +1329,48 @@ function buildDump(S, scene, world, rand, cx, cz) {
 // Special blocks
 // ---------------------------------------------------------------------------
 
-const blockAt = (v) => blockCenter(Math.max(0, Math.min(N - 1, Math.floor((v + HALF) / PITCH))));
+const blockAt = (/** @type {number} */ v) =>
+	blockCenter(Math.max(0, Math.min(N - 1, Math.floor((v + HALF) / PITCH))));
 
-/** Static AABB collider for a footprint centered at (x, z). */
+/**
+ * Static AABB collider for a footprint centered at (x, z).
+ * @param {World} world
+ * @param {number} x
+ * @param {number} z
+ * @param {number} w
+ * @param {number} d
+ * @returns {Box}
+ */
 function solid(world, x, z, w, d) {
 	const b = { minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2 };
 	world.boxes.push(b);
 	return b;
 }
 
+/**
+ * @param {THREE.Group} S
+ * @param {number} x
+ * @param {number} z
+ * @param {number} w
+ * @param {number} d
+ * @param {number} [color]
+ */
 function paving(S, x, z, w, d, color = 0xc7c2b4) {
 	const m = box(w, 0.04, d, color, x, LAWN_Y + 0.02, z);
 	m.castShadow = false;
 	S.add(m);
 }
 
-/** A big dumpster at the curb, facing the road, for the front loader. */
+/**
+ * A big dumpster at the curb, facing the road, for the front loader.
+ * @param {THREE.Group} S
+ * @param {THREE.Scene} scene
+ * @param {World} world
+ * @param {number} x
+ * @param {number} z
+ * @param {number} facing
+ * @param {number} color
+ */
 function addBin(S, scene, world, x, z, facing, color) {
 	// Paved approach from the curb so the truck can drive straight in
 	const fx = Math.sin(facing);
@@ -1040,21 +1425,38 @@ function addBin(S, scene, world, x, z, facing, color) {
 		state: 'idle',
 		cooldown: 0,
 		home: g.position.clone(),
+		hinted: false,
 	});
 }
 
-function cornerTrees(S, world, rand, cx, cz, skip = []) {
-	for (const [sx, sz] of [
+/**
+ * @param {THREE.Group} _S unused; kept so the builders all take the same arguments
+ * @param {World} world
+ * @param {() => number} rand
+ * @param {number} cx
+ * @param {number} cz
+ * @param {[number, number][]} [skip] corners to leave empty, as [sx, sz]
+ */
+function cornerTrees(_S, world, rand, cx, cz, skip = []) {
+	for (const [sx, sz] of /** @type {[number, number][]} */ ([
 		[1, 1],
 		[1, -1],
 		[-1, 1],
 		[-1, -1],
-	]) {
+	])) {
 		if (skip.some(([a, b]) => a === sx && b === sz)) continue;
 		addTree(world, rand, cx + sx * 15.5, cz + sz * 15.5, 1 + rand() * 0.3, 0.9);
 	}
 }
 
+/**
+ * @param {THREE.Group} S static meshes, merged once the town is built
+ * @param {THREE.Scene} scene
+ * @param {World} world
+ * @param {() => number} rand
+ * @param {number} cx
+ * @param {number} cz
+ */
 function buildBar(S, scene, world, rand, cx, cz) {
 	const bar = makeBar();
 	bar.position.set(cx, LAWN_Y, cz + 1);
@@ -1077,6 +1479,14 @@ function buildBar(S, scene, world, rand, cx, cz) {
 		addBatchProp(world, 'gnome', cx + 9 + k, cz + 7.5, 0.4, 'gnome', rand() * 6);
 }
 
+/**
+ * @param {THREE.Group} S static meshes, merged once the town is built
+ * @param {THREE.Scene} scene
+ * @param {World} world
+ * @param {() => number} rand
+ * @param {number} cx
+ * @param {number} cz
+ */
 function buildSchool(S, scene, world, rand, cx, cz) {
 	const school = makeSchool();
 	school.position.set(cx, LAWN_Y, cz - 7);
@@ -1109,6 +1519,14 @@ function buildSchool(S, scene, world, rand, cx, cz) {
 		paving(S, cx - 2.5, cz + 2 + i * 1.1, 1, 1, i % 2 ? 0xfff3b0 : 0xffb3c1);
 }
 
+/**
+ * @param {THREE.Group} S static meshes, merged once the town is built
+ * @param {THREE.Scene} scene
+ * @param {World} world
+ * @param {() => number} rand
+ * @param {number} cx
+ * @param {number} cz
+ */
 function buildFirehouse(S, scene, world, rand, cx, cz) {
 	const fh = makeFirehouse();
 	fh.position.set(cx - 3, LAWN_Y, cz - 3);
@@ -1131,15 +1549,23 @@ function buildFirehouse(S, scene, world, rand, cx, cz) {
 	]);
 }
 
+/**
+ * @param {THREE.Group} S static meshes, merged once the town is built
+ * @param {THREE.Scene} scene
+ * @param {World} world
+ * @param {() => number} rand
+ * @param {number} cx
+ * @param {number} cz
+ */
 function buildGarden(S, scene, world, rand, cx, cz) {
 	// Picket fence all the way round, with gates in the middle of each side
 	const E = BLOCK / 2 - 2.2;
-	for (const [nx, nz] of [
+	for (const [nx, nz] of /** @type {[number, number][]} */ ([
 		[0, 1],
 		[0, -1],
 		[1, 0],
 		[-1, 0],
-	]) {
+	])) {
 		for (let t = -E + 1.2; t <= E - 1.2; t += 2.4) {
 			if (Math.abs(t) < 3.6) continue;
 			const x = cx + nx * E + (nz !== 0 ? t : 0);
@@ -1158,7 +1584,7 @@ function buildGarden(S, scene, world, rand, cx, cz) {
 			for (let i = 0; i < 7; i++) {
 				addBatchProp(
 					world,
-					kinds[row],
+					/** @type {string} */ (kinds[row]),
 					bx - 5.1 + i * 1.7,
 					cz + z + (i % 2 ? 0.5 : -0.5),
 					0.5,
@@ -1204,7 +1630,13 @@ function buildGarden(S, scene, world, rand, cx, cz) {
 	);
 }
 
-/** Ground height (surface + ramps) at a point. */
+/**
+ * Ground height (surface + ramps) at a point.
+ * @param {World} world
+ * @param {number} x
+ * @param {number} z
+ * @returns {number}
+ */
 export function groundHeight(world, x, z) {
 	let h = surfaceHeight(x, z);
 	for (const r of world.ramps) {
@@ -1218,7 +1650,13 @@ export function groundHeight(world, x, z) {
 	return h;
 }
 
-/** True on the grass of a house block (slow going). */
+/**
+ * True on the grass of a house block (slow going).
+ * @param {World} world
+ * @param {number} x
+ * @param {number} z
+ * @returns {boolean}
+ */
 export function isOnLawn(world, x, z) {
 	for (const b of world.blocks) {
 		if (b.type !== 'houses') continue;
