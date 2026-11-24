@@ -5,7 +5,7 @@ import {
   toon, box, cyl, sphere, makeHouse, makeTree, makeBush, makeTrashCan, makeMarker, makeMailbox,
   makeHydrant, makeCone, makeTrashPile, makeSign, makeRamp, makeSeagull, makeLampPost, makeBench,
   makeFlowerBed, makePicnicTable, makeDumpster, makeBooth, makeStatue, makeTrashBag, makeTire,
-  makeFlamingo, makeGnome, makePicketFence, makeBar, makeSchool, makeFlagpole, makeSchoolBus, makePlayground,
+  makeFlamingo, makeGnome, makePicketFence, makeChainFence, makeBar, makeSchool, makeFlagpole, makeSchoolBus, makePlayground,
   makeFirehouse, makeFireEngine, makeShed, makeScarecrow, makeCabbage, makePumpkin, makeSunflower, makeCarrots,
 } from './models.js';
 import { PropBatch } from './props.js';
@@ -79,6 +79,7 @@ export function buildWorld(scene) {
     carrots: new PropBatch(scene, makeCarrots(), 40),
     sunflower: new PropBatch(scene, makeSunflower(), 40),
     ...treeBatches(scene),
+    chainlink: new PropBatch(scene, makeChainFence(), 60),
   };
 
   // Grass all around, one asphalt slab for every road (no z-fighting)
@@ -431,7 +432,7 @@ function buildHouseBlock(S, scene, world, rand, cx, cz, bx, bz, streetNames, fam
     // White picket fence along the front of some yards, with gaps for the
     // path and driveway
     if (rand() < 0.6) {
-      const fenceLine = BLOCK / 2 - 1.8;
+      const fenceLine = BLOCK / 2 - 2.3;
       for (let side = -14.4; side <= 14.4; side += 2.4) {
         if (Math.abs(side) < 1.6) continue; // front path
         if (side > dwSide - 2.0 && side < dwSide + 2.0) continue; // driveway
@@ -441,11 +442,11 @@ function buildHouseBlock(S, scene, world, rand, cx, cz, bx, bz, streetNames, fam
     }
     // Lawn ornaments: a pink flamingo or a garden gnome (or both)
     if (rand() < 0.55) {
-      const [ox, oz] = at(front + 3.2, -w / 3.3 - 0.4);
+      const [ox, oz] = at(front + 1.7, -w / 3.3 - 1.1);
       addBatchProp(world, 'flamingo', ox, oz, 0.45, 'flamingo', facing + rand() * 2 - 1);
     }
     if (rand() < 0.45) {
-      const [ox, oz] = at(front + 2.2, 1.6);
+      const [ox, oz] = at(front + 1.4, 1.5);
       addBatchProp(world, 'gnome', ox, oz, 0.4, 'gnome', facing + rand() - 0.5);
     }
   }
@@ -660,28 +661,21 @@ function buildDump(S, scene, world, rand, cx, cz) {
     S.add(st);
   }
 
-  // Chain-link fence all the way round, with wide gates on the town side
+  // Chain-link fence round the back and sides, in knock-over-able sections
   const F = 18.6;
-  const fenceMat = toon(0xc9ccd3, { transparent: true, opacity: 0.45 });
   const fence = (x0, z0, x1, z1) => {
     const len = Math.hypot(x1 - x0, z1 - z0);
     const n = Math.max(1, Math.round(len / 3));
-    for (let i = 0; i <= n; i++) {
-      const t = i / n;
-      S.add(cyl(0.08, 0.08, 2.1, 0x9aa0a8, x0 + (x1 - x0) * t, LAWN_Y + 1.05, z0 + (z1 - z0) * t, 6));
+    const rot = Math.atan2(z1 - z0, x1 - x0); // section model runs along x
+    for (let i = 0; i < n; i++) {
+      const t = (i + 0.5) / n;
+      addBatchProp(world, 'chainlink', x0 + (x1 - x0) * t, z0 + (z1 - z0) * t, 1.4, 'chainlink', -rot);
     }
-    const mx = (x0 + x1) / 2;
-    const mz = (z0 + z1) / 2;
-    const horiz = Math.abs(x1 - x0) > Math.abs(z1 - z0);
-    S.add(box(horiz ? len : 0.06, 1.7, horiz ? 0.06 : len, 0, mx, LAWN_Y + 1.1, mz, fenceMat));
-    S.add(box(horiz ? len : 0.08, 0.08, horiz ? 0.08 : len, 0x9aa0a8, mx, LAWN_Y + 2.0, mz));
-    world.boxes.push({
-      minX: Math.min(x0, x1) - 0.3, maxX: Math.max(x0, x1) + 0.3, minZ: Math.min(z0, z1) - 0.3, maxZ: Math.max(z0, z1) + 0.3,
-    });
+    S.add(cyl(0.09, 0.09, 2.2, 0x9aa0a8, x1, LAWN_Y + 1.1, z1, 8)); // last post
   };
   fence(cx + F, cz - F, cx + F, cz + F); // east
   fence(cx - F, cz - F, cx + F, cz - F); // north
-  fence(cx - F, cz - F, cx - F, cz - 2); // west (open toward the south-west corner)
+  fence(cx - F, cz - 2, cx - F, cz - F); // west (open toward the south-west corner)
   fence(cx + 2, cz + F, cx + F, cz + F); // south
 
   // Dumpsters along the back fence, a little office by the gate
@@ -874,8 +868,8 @@ function buildGarden(S, scene, world, rand, cx, cz) {
       const bed = box(12, 0.3, 3, 0x6b4a2f, bx, LAWN_Y + 0.15, cz + z);
       bed.castShadow = false;
       S.add(bed);
-      for (let i = 0; i < 5; i++) {
-        addBatchProp(world, kinds[row], bx - 4.8 + i * 2.4, cz + z, 0.5, 'veggie', rand() * 6);
+      for (let i = 0; i < 7; i++) {
+        addBatchProp(world, kinds[row], bx - 5.1 + i * 1.7, cz + z + (i % 2 ? 0.5 : -0.5), 0.5, 'veggie', rand() * 6);
       }
     }
   });

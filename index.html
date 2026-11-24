@@ -89,25 +89,64 @@
         <p id="rank"></p>
         <table id="resultTable"></table>
         <div id="reviewBox">
-          <svg id="brenda" viewBox="0 0 100 100" aria-label="Brenda, a possum in glasses">
-            <circle cx="50" cy="50" r="48" fill="#e8dcc0" />
-            <path d="M14 100 Q50 66 86 100 Z" fill="#3d7ea6" />
-            <path d="M44 74 L50 92 L56 74 Z" fill="#d9534f" />
-            <ellipse cx="22" cy="28" rx="10" ry="12" fill="#2b2d33" />
-            <ellipse cx="78" cy="28" rx="10" ry="12" fill="#2b2d33" />
-            <ellipse cx="22" cy="29" rx="5" ry="6" fill="#ff9fb5" />
-            <ellipse cx="78" cy="29" rx="5" ry="6" fill="#ff9fb5" />
-            <ellipse cx="50" cy="46" rx="30" ry="27" fill="#a8a8b0" />
-            <path d="M28 40 Q50 30 72 40 L56 76 Q50 82 44 76 Z" fill="#fafaf6" />
-            <ellipse cx="50" cy="76" rx="5" ry="4" fill="#ff7f9e" />
-            <circle cx="39" cy="48" r="4" fill="#1b1b22" />
-            <circle cx="61" cy="48" r="4" fill="#1b1b22" />
-            <circle cx="40.5" cy="46.5" r="1.3" fill="#fff" />
-            <circle cx="62.5" cy="46.5" r="1.3" fill="#fff" />
-            <circle cx="39" cy="48" r="8.5" fill="none" stroke="#2b2d33" stroke-width="2.4" />
-            <circle cx="61" cy="48" r="8.5" fill="none" stroke="#2b2d33" stroke-width="2.4" />
-            <line x1="47.5" y1="48" x2="52.5" y2="48" stroke="#2b2d33" stroke-width="2.4" />
-            <rect x="57" y="84" width="16" height="11" rx="2" fill="#fffbe8" stroke="#2b2d33" stroke-width="1.2" />
+          <svg id="brenda" viewBox="0 0 120 120" aria-label="Brenda, an opossum in cat-eye glasses, pearls and a blazer">
+            <defs>
+              <clipPath id="bclip"><circle cx="60" cy="60" r="58" /></clipPath>
+              <radialGradient id="bbg" cx="50%" cy="30%" r="75%"><stop offset="0" stop-color="#fff3d6" /><stop offset="1" stop-color="#f2c98f" /></radialGradient>
+            </defs>
+            <g clip-path="url(#bclip)" stroke-linejoin="round">
+              <rect width="120" height="120" fill="url(#bbg)" />
+              <!-- ears, tucked behind the head -->
+              <circle cx="31" cy="31" r="12" fill="#34353d" />
+              <circle cx="89" cy="31" r="12" fill="#34353d" />
+              <circle cx="32" cy="32" r="6.5" fill="#f4a3b4" />
+              <circle cx="88" cy="32" r="6.5" fill="#f4a3b4" />
+              <!-- tidy grey bun, with a pencil in it -->
+              <line x1="48" y1="9" x2="70" y2="20" stroke="#ffc93c" stroke-width="3" stroke-linecap="round" />
+              <line x1="66" y1="18" x2="70" y2="20" stroke="#f4a3b4" stroke-width="3" stroke-linecap="round" />
+              <circle cx="60" cy="18" r="9" fill="#9d9daa" />
+              <path d="M54 15 Q60 11 66 15" fill="none" stroke="#86869a" stroke-width="1.4" />
+              <!-- neck and blazer -->
+              <path d="M49 78 L71 78 L72 98 L48 98 Z" fill="#a9a9b6" />
+              <path d="M4 124 C8 101 26 93 44 91 L60 109 L76 91 C94 93 112 101 116 124 Z" fill="#41537f" />
+              <path d="M44 91 L60 109 L51 124 L36 124 Z" fill="#33426a" />
+              <path d="M76 91 L60 109 L69 124 L84 124 Z" fill="#33426a" />
+              <path d="M44 91 L51 89 L60 101 L69 89 L76 91 L60 109 Z" fill="#fffbee" />
+              <g fill="#fffdf7" stroke="#d6cfbf" stroke-width="0.6">
+                <circle cx="50.5" cy="91.5" r="2.1" /><circle cx="53.5" cy="94.6" r="2.1" /><circle cx="56.8" cy="96.6" r="2.1" /><circle cx="60" cy="97.2" r="2.1" /><circle cx="63.2" cy="96.6" r="2.1" /><circle cx="66.5" cy="94.6" r="2.1" /><circle cx="69.5" cy="91.5" r="2.1" />
+              </g>
+              <rect x="73" y="103" width="20" height="9" rx="2" fill="#fffbee" stroke="#2b2d33" stroke-width="1.1" transform="rotate(-6 83 107.5)" />
+              <text x="83" y="109.6" font-size="4.2" font-weight="800" text-anchor="middle" font-family="Trebuchet MS, sans-serif" fill="#c8402e" transform="rotate(-6 83 107.5)">BRENDA</text>
+              <!-- head: grey fur with the white heart-shaped opossum face -->
+              <path d="M60 22 C81 22 94 33 94 48 C94 62 81 71 71 80 Q60 90 49 80 C39 71 26 62 26 48 C26 33 39 22 60 22 Z" fill="#a9a9b6" />
+              <path d="M60 46 L55 37 C50 31 40 31 35 38 C31 44 31 53 35 59 C41 67 48 72 52 79 Q60 89 68 79 C72 72 79 67 85 59 C89 53 89 44 85 38 C80 31 70 31 65 37 Z" fill="#fafaf5" />
+              <!-- blush -->
+              <ellipse cx="41" cy="63" rx="4.5" ry="2.4" fill="#ff9fb5" opacity="0.55" />
+              <ellipse cx="79" cy="63" rx="4.5" ry="2.4" fill="#ff9fb5" opacity="0.55" />
+              <!-- eyes -->
+              <ellipse cx="47" cy="51" rx="3.7" ry="4.3" fill="#1d1d24" />
+              <ellipse cx="73" cy="51" rx="3.7" ry="4.3" fill="#1d1d24" />
+              <circle cx="48.4" cy="49.4" r="1.4" fill="#fff" />
+              <circle cx="74.4" cy="49.4" r="1.4" fill="#fff" />
+              <!-- cat-eye glasses -->
+              <g fill="rgba(200,235,255,0.18)" stroke="#c8402e" stroke-width="2.2">
+                <path d="M36.5 47.5 Q39 42 47 42 Q55.5 42 56 49 Q55 57.5 47 57.5 Q38.5 57 36.5 47.5 Z" />
+                <path d="M83.5 47.5 Q81 42 73 42 Q64.5 42 64 49 Q65 57.5 73 57.5 Q81.5 57 83.5 47.5 Z" />
+              </g>
+              <g fill="none" stroke="#c8402e" stroke-width="2.2" stroke-linecap="round">
+                <path d="M56 48.5 Q60 46 64 48.5" />
+                <path d="M36.5 47.5 L32.5 42.5" />
+                <path d="M83.5 47.5 L87.5 42.5" />
+              </g>
+              <!-- nose, smile, whiskers -->
+              <ellipse cx="60" cy="78" rx="4.6" ry="3.3" fill="#ff7f9e" />
+              <ellipse cx="58.7" cy="77" rx="1.4" ry="0.8" fill="#fff" opacity="0.75" />
+              <path d="M56.5 82.5 Q58.3 84.6 60 82.8 Q61.7 84.6 63.5 82.5" fill="none" stroke="#2b2d33" stroke-width="1.2" stroke-linecap="round" />
+              <g stroke="#9a9aa6" stroke-width="0.8" stroke-linecap="round">
+                <path d="M53 75 L42 72.5" /><path d="M53 77.5 L42 78.5" /><path d="M67 75 L78 72.5" /><path d="M67 77.5 L78 78.5" />
+              </g>
+            </g>
+            <circle cx="60" cy="60" r="58" fill="none" stroke="#2b2d33" stroke-width="4" />
           </svg>
           <div>
             <p id="review"></p>

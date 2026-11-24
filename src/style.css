@@ -428,11 +428,9 @@ button.mini {
 }
 
 #brenda {
-  width: 72px;
-  height: 72px;
+  width: 84px;
+  height: 84px;
   flex: none;
-  border: 3px solid #2b2d33;
-  border-radius: 50%;
 }
 
 #reviewBox p {
@@ -617,85 +615,145 @@ p.small {
   }
 }
 
+/* ---------- HUD layout: one stats strip with Steve cam beneath (all sizes) ---------- */
+
+#stats {
+  top: 8px;
+  left: calc(8px + env(safe-area-inset-left));
+  width: auto;
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 6px 12px;
+  border-width: 2px;
+  box-shadow: 0 3px 0 #2b2d33;
+  border-radius: 12px;
+}
+#stats .stat {
+  flex-direction: column;
+  align-items: flex-start;
+  margin: 0;
+}
+#stats .stat span:last-child {
+  font-size: 19px;
+}
+.label {
+  font-size: 10px;
+}
+#stats .meter {
+  margin: 0;
+  width: 90px;
+}
+#tummyMeter,
+#status {
+  display: none;
+}
+.bar {
+  height: 10px;
+}
+#minimap {
+  top: 8px;
+  right: calc(8px + env(safe-area-inset-right));
+  width: 108px;
+  height: 108px;
+  border-width: 2px;
+  border-radius: 12px;
+  box-shadow: 0 3px 0 #2b2d33;
+}
+#portrait {
+  left: calc(8px + env(safe-area-inset-left));
+  top: 66px;
+  bottom: auto;
+  width: 104px;
+  height: 96px;
+  border-width: 2px;
+  border-radius: 12px;
+  box-shadow: 0 3px 0 #2b2d33;
+}
+#portraitBar {
+  display: block;
+}
+#moodText {
+  font-size: 10px;
+}
+#mood {
+  font-size: 18px;
+}
+#toast {
+  top: 10px;
+  max-width: 44vw;
+}
+.toast-msg {
+  font-size: 12px;
+  padding: 5px 10px;
+}
+.popup {
+  font-size: 18px;
+}
+.popup.gold {
+  font-size: 22px;
+}
+
+/* a little roomier when there's space */
+@media (min-height: 541px) and (min-width: 761px) {
+  #stats {
+    top: 14px;
+    left: 14px;
+    gap: 20px;
+    padding: 8px 16px;
+    border-width: 3px;
+    box-shadow: 0 4px 0 #2b2d33;
+  }
+  #stats .stat span:last-child {
+    font-size: 24px;
+  }
+  .label {
+    font-size: 11px;
+  }
+  #stats .meter {
+    width: 120px;
+  }
+  #portrait {
+    left: 14px;
+    top: 84px;
+    width: 150px;
+    height: 136px;
+    border-width: 3px;
+    box-shadow: 0 4px 0 #2b2d33;
+  }
+  #moodText {
+    font-size: 12px;
+  }
+  #mood {
+    font-size: 22px;
+  }
+  #minimap {
+    top: 14px;
+    right: 14px;
+    width: 160px;
+    height: 160px;
+    border-width: 3px;
+    box-shadow: 0 4px 0 #2b2d33;
+  }
+  #toast {
+    top: 16px;
+    max-width: 46vw;
+  }
+  .toast-msg {
+    font-size: 14px;
+    padding: 6px 14px;
+  }
+  .popup {
+    font-size: 22px;
+  }
+  .popup.gold {
+    font-size: 27px;
+  }
+}
+
 /* ---------- Small / short screens (phones in landscape) ---------- */
 
 @media (max-height: 540px), (max-width: 760px) {
-  #stats {
-    top: 8px;
-    left: calc(8px + env(safe-area-inset-left));
-    width: auto;
-    display: flex;
-    gap: 14px;
-    align-items: center;
-    padding: 6px 12px;
-    border-width: 2px;
-    box-shadow: 0 3px 0 #2b2d33;
-    border-radius: 12px;
-  }
-  #stats .stat {
-    flex-direction: column;
-    align-items: flex-start;
-    margin: 0;
-  }
-  #stats .stat span:last-child {
-    font-size: 19px;
-  }
-  .label {
-    font-size: 10px;
-  }
-  #stats .meter {
-    margin: 0;
-    width: 90px;
-  }
-  #tummyMeter,
-  #status {
-    display: none;
-  }
-  .bar {
-    height: 10px;
-  }
-  #minimap {
-    top: 8px;
-    right: calc(8px + env(safe-area-inset-right));
-    width: 108px;
-    height: 108px;
-    border-width: 2px;
-    border-radius: 12px;
-    box-shadow: 0 3px 0 #2b2d33;
-  }
-  #portrait {
-    left: calc(8px + env(safe-area-inset-left));
-    top: 66px;
-    bottom: auto;
-    width: 104px;
-    height: 96px;
-    border-width: 2px;
-    border-radius: 12px;
-    box-shadow: 0 3px 0 #2b2d33;
-  }
-  #portraitBar {
-    display: block;
-  }
-  #moodText {
-    font-size: 10px;
-  }
-  #mood {
-    font-size: 18px;
-  }
-  #toast {
-    top: 10px;
-    max-width: 44vw;
-  }
-  .toast-msg {
-    font-size: 12px;
-    padding: 5px 10px;
-  }
-  .popup {
-    font-size: 18px;
-  }
-  .popup.gold {
-    font-size: 22px;
-  }
   #hint {
     display: none;
   }

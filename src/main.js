@@ -301,11 +301,19 @@ scene.add(guide);
 // Citizens: a mix of critters out for a stroll. Most will get out of Steve's
 // way, by running or leaping; the slow ones get bounced (gently, cartoonishly).
 const SPECIES = {
-  kitten: { n: 4, speed: 2.2, dodge: 0.8, sound: 'meow' },
-  puppy: { n: 4, speed: 2.6, dodge: 0.6, sound: 'yip' },
-  bunny: { n: 3, speed: 2.4, dodge: 0.9, sound: 'squeak', hop: true },
-  hedgehog: { n: 3, speed: 1.1, dodge: 0.25, sound: 'huff' },
-  squirrel: { n: 3, speed: 3.2, dodge: 0.85, sound: 'squeak' },
+  // townsfolk
+  bear: { n: 2, speed: 1.7, dodge: 0.5, sound: 'oof' },
+  fox: { n: 2, speed: 3.6, dodge: 0.85, sound: 'yip' },
+  bunnylady: { n: 2, speed: 1.6, dodge: 0.6, sound: 'squeak' },
+  frog: { n: 2, speed: 2.4, dodge: 0.7, sound: 'squeak' },
+  badger: { n: 2, speed: 1.2, dodge: 0.45, sound: 'oof' },
+  mole: { n: 2, speed: 1.9, dodge: 0.6, sound: 'oof' },
+  pig: { n: 2, speed: 1.6, dodge: 0.5, sound: 'oof' },
+  // pets
+  kitten: { n: 2, speed: 2.2, dodge: 0.8, sound: 'meow' },
+  puppy: { n: 1, speed: 2.6, dodge: 0.6, sound: 'yip' },
+  bunny: { n: 0, speed: 2.4, dodge: 0.9, sound: 'squeak', hop: true },
+  squirrel: { n: 2, speed: 3.2, dodge: 0.85, sound: 'squeak' },
   dalmatian: { n: 0, speed: 2.6, dodge: 0.6, sound: 'yip' },
 };
 const cats = []; // (all citizens, not just cats; the name stuck)
@@ -1306,6 +1314,7 @@ const KINDS = {
   tire: { style: 'fly', pts: 1, slow: 0.97, text: 'boing!', sound: 'boing', light: true },
   veggie: { style: 'fly', pts: 1, slow: 0.99, text: 'squish!', sound: 'crunch', light: true, debris: [0x6fbf4a, 0x9fd86b, 0xff8c2a] },
   sunflower: { style: 'tip', pts: 1, slow: 0.98, text: 'timber!', sound: 'crunch' },
+  chainlink: { style: 'tip', pts: 2, slow: 0.9, text: 'clang!', sound: 'clang' },
   tree: { style: 'tip', pts: 5, slow: 0.8, text: 'TIMBER!', sound: 'crunch', quiet: true },
   scarecrow: { style: 'tip', pts: 3, slow: 0.95, text: 'scarecrow down!', sound: 'crunch' },
 };
@@ -1417,6 +1426,13 @@ function knockProp(p, nx, nz, speed) {
   const dl = Math.hypot(dx, dz) || 1;
   dx /= dl;
   dz /= dl;
+  if (K.style === 'tip' && (p.kind === 'chainlink' || p.kind === 'sign')) {
+    // flat things fall face-first, away from the truck
+    const n = new THREE.Vector3(0, 0, 1).applyQuaternion(p.homeQuat);
+    const sgn = n.x * dx + n.z * dz >= 0 ? 1 : -1;
+    dx = n.x * sgn;
+    dz = n.z * sgn;
+  }
   if (K.style === 'tip') {
     p.state = 'tip';
     p.tipDir = new THREE.Vector3(dx, 0, dz);
@@ -1492,11 +1508,162 @@ function catBlocked(x, z) {
   return Math.abs(x) > HALF + 3 || Math.abs(z) > HALF + 3;
 }
 
+const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+
+/** Two-legged townsfolk: stroll, panic-run with flailing arms, wave, get bounced. */
+function animateFolk(c, dt, time) {
+  const moving = c.state === 'walk' || c.state === 'flee';
+  const fleeing = c.state === 'flee';
+  c.ph = (c.ph || Math.random() * 6) + dt * (moving ? (fleeing ? 16 : 7) * Math.max(0.8, c.spec.speed / 2) : 0);
+  const k = (v, target, rate = 10) => v + (target - v) * Math.min(1, dt * rate);
+  const B = c.body;
+  const near = Math.hypot(c.x - T.pos.x, c.z - T.pos.z) < 16 && Math.hypot(T.vel.x, T.vel.z) < 6;
+  let legA = 0;
+  let armA = 0;
+  let armLift = [0, 0];
+  let pitch = 0;
+  let roll = 0;
+  let bob = 0;
+  let headYaw = 0;
+  let headPitch = 0;
+  if (moving) {
+    const sw = Math.sin(c.ph);
+    legA = sw * (fleeing ? 0.9 : 0.55);
+    armA = -sw * (fleeing ? 0.3 : 0.5);
+    bob = Math.abs(Math.cos(c.ph)) * (fleeing ? 0.07 : 0.04);
+    roll = Math.sin(c.ph) * 0.05;
+    if (fleeing) {
+      // arms up, flailing, running for it
+      armLift = [2.6 + Math.sin(c.ph * 1.7) * 0.5, 2.6 + Math.cos(c.ph * 1.7) * 0.5];
+      pitch = 0.2;
+    }
+  } else if (c.state === 'sit') {
+    // standing about; looks around, and waves at Steve when he's nearby and polite
+    headYaw = Math.sin(time * 0.6 + c.z) * 0.6;
+    if (near) {
+      const a = Math.atan2(T.pos.x - c.x, T.pos.z - c.z) - c.vh;
+      headYaw = Math.max(-1, Math.min(1, wrapAngle(a)));
+      armLift[0] = 2.5;
+    }
+  } else if (c.state === 'jump' || c.state === 'fly') {
+    armLift = [2.8, 2.8];
+    legA = 0.6;
+    if (c.state === 'fly') roll = Math.sin(time * 25) * 0.4;
+  } else if (c.state === 'dazed') {
+    headYaw = Math.sin(time * 6) * 0.3;
+    roll = Math.sin(time * 6) * 0.15;
+  }
+  c.legs[0].rotation.x = k(c.legs[0].rotation.x, legA, 18);
+  c.legs[1].rotation.x = k(c.legs[1].rotation.x, -legA, 18);
+  for (let i = 0; i < 2; i++) {
+    const side = i === 0 ? 1 : -1;
+    const wave = c.state === 'sit' && near && i === 0 ? Math.sin(time * 12) * 0.35 : 0;
+    const swingDir = i === 0 ? armA : -armA;
+    c.arms[i].rotation.x = k(c.arms[i].rotation.x, armLift[i] ? -0.2 : swingDir, 14);
+    c.arms[i].rotation.z = k(c.arms[i].rotation.z, side * (0.12 + armLift[i]) + wave, 14);
+  }
+  if (c.state !== 'fly') B.rotation.x = k(B.rotation.x, pitch);
+  B.rotation.z = k(B.rotation.z, roll, 14);
+  B.position.y = k(B.position.y, c.baseY + bob, 20);
+  c.head.rotation.y = k(c.head.rotation.y, headYaw, 5);
+  c.head.rotation.x = k(c.head.rotation.x, headPitch, 8);
+  c.tail.rotation.z = Math.sin(time * 3 + c.x) * 0.3;
+  c.tailSegs.forEach((sg, i) => (sg.rotation.z = Math.sin(time * 2 - i * 0.6) * 0.15));
+  c.blinkT = (c.blinkT ?? Math.random() * 3) - dt;
+  if (c.blinkT < -0.12) c.blinkT = 2 + Math.random() * 3;
+  const closed = c.blinkT < 0 || c.state === 'dazed';
+  for (const e of c.eyes) e.scale.y = closed ? 0.15 : 1;
+}
+
+/** Pose and animate a critter from its state. */
+function animateCritter(c, dt, time) {
+  c.vh = c.vh ?? c.h;
+  c.vh += wrapAngle(c.h - c.vh) * Math.min(1, dt * (c.state === 'flee' ? 12 : 6)); // turn smoothly
+  c.group.position.set(c.x, c.y, c.z);
+  c.group.rotation.y = c.vh;
+  if (c.biped) return animateFolk(c, dt, time);
+  const moving = c.state === 'walk' || c.state === 'flee';
+  const fleeing = c.state === 'flee';
+  const airborne = c.state === 'jump' || c.state === 'fly';
+  c.ph = (c.ph || Math.random() * 6) + dt * (moving ? (fleeing ? 22 : 11) * (c.spec.speed > 2.9 ? 1.2 : 1) : 0);
+  const k = (v, target, rate = 10) => v + (target - v) * Math.min(1, dt * rate);
+  const B = c.body;
+  let bodyY = c.baseY;
+  let pitch = 0;
+  let roll = 0;
+  let squash = 1;
+  const legSwing = [0, 0, 0, 0];
+  let headPitch = 0;
+  let headYaw = 0;
+  let earFlap = 0;
+
+  if (c.spec.hop && moving) {
+    // bunny: hop, squash on landing, stretch in the air, back feet kick
+    const t = (c.ph * 0.45) % (Math.PI * 2);
+    const air = Math.max(0, Math.sin(t));
+    bodyY += air * 0.4;
+    squash = air > 0.05 ? 1 + air * 0.12 : 0.85;
+    pitch = Math.cos(t) * 0.25;
+    legSwing[2] = legSwing[3] = -air * 0.9;
+    legSwing[0] = legSwing[1] = air * 0.5;
+    earFlap = -air * 0.5;
+  } else if (moving) {
+    // trot: diagonal leg pairs, a little bob and waddle
+    const sw = Math.sin(c.ph) * (fleeing ? 0.9 : 0.65);
+    legSwing[0] = legSwing[3] = sw;
+    legSwing[1] = legSwing[2] = -sw;
+    bodyY += Math.abs(Math.cos(c.ph)) * (fleeing ? 0.06 : 0.035);
+    roll = Math.sin(c.ph) * 0.06;
+    headPitch = Math.cos(c.ph * 2) * 0.06;
+    pitch = fleeing ? 0.18 : 0; // lean into it
+    earFlap = Math.sin(c.ph * 2) * 0.2 + (fleeing ? -0.4 : 0);
+  } else if (c.state === 'sit') {
+    // sit back on the haunches and look around
+    pitch = -0.35;
+    bodyY -= 0.06;
+    legSwing[2] = legSwing[3] = -1.2;
+    legSwing[0] = legSwing[1] = 0.3;
+    headPitch = 0.28;
+    headYaw = Math.sin(time * 0.7 + c.z) * 0.6;
+    earFlap = Math.sin(time * 5 + c.x) > 0.96 ? 0.3 : 0; // ear twitch
+  } else if (airborne) {
+    // limbs out, ears up, wheee (or nope)
+    legSwing[0] = legSwing[1] = -0.9;
+    legSwing[2] = legSwing[3] = 0.9;
+    squash = c.state === 'jump' ? 1.12 : 1;
+    earFlap = -0.6;
+    if (c.state === 'fly') roll = Math.sin(time * 30) * 0.3;
+  } else if (c.state === 'dazed') {
+    headYaw = Math.sin(time * 6) * 0.25;
+    roll = Math.sin(time * 6) * 0.12;
+    pitch = -0.1;
+  }
+  if (c.state !== 'fly') B.rotation.x = k(B.rotation.x, pitch);
+  B.rotation.z = k(B.rotation.z, roll, 14);
+  B.position.y = k(B.position.y, bodyY, 20);
+  B.scale.set(1 / Math.sqrt(squash), k(B.scale.y, squash, 18), 1 / Math.sqrt(squash));
+  c.legs.forEach((l, i) => (l.rotation.x = k(l.rotation.x, legSwing[i], 16)));
+  c.head.rotation.x = k(c.head.rotation.x, headPitch, 8);
+  c.head.rotation.y = k(c.head.rotation.y, headYaw, 4);
+  c.ears.forEach((e, i) => (e.rotation.x = k(e.rotation.x, earFlap, 10)));
+  // tail: wag (fast for happy dogs, swishy for cats), sway for the rest
+  const wagRate = c.species === 'puppy' || c.species === 'dalmatian' ? 18 : c.species === 'kitten' ? 3 : 2;
+  const wagAmt = c.species === 'puppy' || c.species === 'dalmatian' ? 0.5 : 0.25;
+  c.tail.rotation.z = Math.sin(time * wagRate + c.x) * wagAmt;
+  c.tailSegs.forEach((sg, i) => (sg.rotation.z = Math.sin(time * wagRate * 0.6 - i * 0.6 + c.z) * 0.12));
+  // blink every few seconds
+  c.blinkT = (c.blinkT ?? Math.random() * 3) - dt;
+  if (c.blinkT < -0.12) c.blinkT = 2 + Math.random() * 3;
+  const closed = c.blinkT < 0 || c.state === 'dazed';
+  for (const e of c.eyes) e.scale.y = closed ? 0.15 : 1;
+}
+
 function critterSound(c) {
   const snd = c.spec.sound;
   if (snd === 'meow') audio.meow();
   else if (snd === 'yip') audio.yip();
   else if (snd === 'huff') audio.huff();
+  else if (snd === 'oof') audio.oof();
   else audio.squeak();
 }
 
@@ -1636,20 +1803,7 @@ function updateCats(dt, time) {
         c.t = 3;
       }
     }
-    c.group.position.set(c.x, c.y, c.z);
-    c.group.rotation.y = c.h;
-    const moving = c.state === 'walk' || c.state === 'flee';
-    const rate = c.state === 'flee' ? 22 : 12;
-    if (c.spec.hop) {
-      // bunnies hop
-      c.body.position.y = moving ? Math.abs(Math.sin(time * rate * 0.6 + c.x)) * 0.35 : 0;
-    } else {
-      c.body.position.y = moving ? Math.abs(Math.sin(time * rate + c.x)) * 0.05 : 0;
-      c.legs.forEach((l, i) => (l.rotation.x = moving ? Math.sin(time * rate + (i % 2 === (i < 2 ? 0 : 1) ? 0 : Math.PI)) * 0.6 : 0));
-    }
-    c.body.scale.y = c.state === 'sit' ? 0.88 : 1;
-    c.head.rotation.z = c.state === 'sit' ? Math.sin(time * 1.5 + c.z) * 0.15 : 0;
-    c.tail.rotation.z = Math.sin(time * (c.state === 'flee' ? 14 : 3) + c.z) * 0.5;
+    animateCritter(c, dt, time);
   }
 }
 
@@ -2262,7 +2416,7 @@ function updateGuide(time) {
 // forks lift it up and over the cab into the hopper.
 // ---------------------------------------------------------------------------
 const LOADER = truck.loader;
-const LREST = { r: 0.35, L: 3.4, tilt: 0 };
+const LREST = { r: -0.14, L: 2.3, tilt: -0.05 }; // tucked over the cab, forks folded up
 const LTOP = { r: -1.78, L: 4.4, tilt: -2.4 };
 const loaderPose = { ...LREST };
 const DUMPSTER_BAGS = 6;
@@ -2281,7 +2435,7 @@ const lerpL = (a, b, k) => ({ r: a.r + (b.r - a.r) * k, L: a.L + (b.L - a.L) * k
 function binToLoader(p) {
   truck.body.worldToLocal(armTmp.copy(p));
   armTmp.y += 0.95;
-  armTmp.z -= 0.9;
+  armTmp.z -= 0.65;
   armTmp.x = 0;
   armTmp.sub(LOADER.P);
   return { r: Math.atan2(-armTmp.y, armTmp.z), L: Math.min(6.8, Math.max(3, armTmp.length())), tilt: 0 };
@@ -2828,7 +2982,8 @@ function updatePigeons(dt, time) {
       pg.pos.x += Math.sin(pg.h) * 0.3 * dt;
       pg.pos.z += Math.cos(pg.h) * 0.3 * dt;
       pg.group.rotation.x = Math.max(0, Math.sin(time * 9 + pg.pos.x * 3)) * 0.5; // peck peck
-      for (const w of pg.wings) w.rotation.z = 0;
+      pg.wings[0].rotation.z = -1.35; // wings folded along the body
+      pg.wings[1].rotation.z = 1.35;
       if (d < 13) {
         // Everybody panics
         pg.state = 'fly';

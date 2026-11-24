@@ -163,6 +163,10 @@ export class Audio {
     this.tone(210, 0.5, { type: 'triangle', vol: 0.06, slide: 120, delay: 0.1 });
     this.noise(0.6, { vol: 0.3, freq: 700, q: 0.8, delay: 0.55 });
   }
+  oof() {
+    this.tone(220, 0.18, { type: 'triangle', vol: 0.18, slide: -90 });
+    this.noise(0.1, { vol: 0.12, freq: 400 });
+  }
   yip() {
     this.tone(950, 0.08, { type: 'square', vol: 0.07, slide: -250 });
     this.tone(1050, 0.08, { type: 'square', vol: 0.06, slide: -300, delay: 0.12 });

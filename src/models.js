@@ -285,10 +285,9 @@ export function makeTruck() {
   body.add(box(2.3, 0.45, 7.0, DARK, 0, 0.95, -0.05));
   body.add(box(2.9, 0.4, 0.3, CHROME, 0, 0.95, 3.78));
   body.add(box(2.9, 0.4, 0.3, CHROME, 0, 0.95, -3.98));
-  // Side skirts between the wheels, with a little step
+  // Side skirts between the wheels
   for (const sx of [1.22, -1.22]) {
     body.add(box(0.12, 0.35, 2.2, GREEN_DARK, sx, 1.0, 0.25));
-    body.add(box(0.35, 0.08, 0.6, CHROME, sx * 1.1, 0.85, 1.35));
   }
 
   // --- Cab: open doorways on both sides, like a side-loader. Steve drives
@@ -309,9 +308,10 @@ export function makeTruck() {
     body.add(box(0.05, 1.95, 0.05, TRUCK_GREEN, sx * 1.36, 2.13, cabZ - 0.84));
     // Grab handle and a step up into the doorway
     body.add(cyl(0.04, 0.04, 0.9, CHROME, sx * 1.38, 2.2, cabZ - 0.72, 6));
-    body.add(box(0.4, 0.08, 0.9, CHROME, sx * 1.45, 0.9, cabZ));
-    body.add(box(0.06, 0.3, 0.06, CHROME, sx * 1.38, 1.04, cabZ - 0.4));
-    body.add(box(0.06, 0.3, 0.06, CHROME, sx * 1.38, 1.04, cabZ + 0.4));
+    // step sits just behind the front wheel, clear of the tire
+    body.add(box(0.36, 0.08, 0.5, CHROME, sx * 1.44, 0.82, 1.32));
+    body.add(box(0.06, 0.34, 0.06, CHROME, sx * 1.36, 0.98, 1.12));
+    body.add(box(0.06, 0.34, 0.06, CHROME, sx * 1.36, 0.98, 1.52));
   }
   // Passenger seat with its passenger: a pizza box, seatbelt on
   body.add(box(0.9, 0.3, 0.8, 0x8e5b3d, 0.75, 1.42, cabZ - 0.3));
@@ -372,9 +372,9 @@ export function makeTruck() {
   body.add(beacon);
 
   // Exhaust stack (behind the cab on the driver side)
-  body.add(cyl(0.11, 0.11, 2.3, 0xaab0b8, 1.22, 2.55, cabZ - 1.15, 10));
-  body.add(cyl(0.15, 0.11, 0.18, 0x55585f, 1.22, 3.75, cabZ - 1.15, 10));
-  body.add(box(0.06, 0.6, 0.3, 0x55585f, 1.36, 2.2, cabZ - 1.15));
+  body.add(cyl(0.11, 0.11, 2.3, 0xaab0b8, 0.85, 2.55, cabZ - 1.12, 10));
+  body.add(cyl(0.15, 0.11, 0.18, 0x55585f, 0.85, 3.75, cabZ - 1.12, 10));
+  body.add(box(0.3, 0.6, 0.06, 0x55585f, 0.85, 2.2, cabZ - 1.0));
 
   // --- Compactor body: open hopper up front, closed dome at the back ---
   const compZ = -1.25;
@@ -549,9 +549,25 @@ export function makeTruck() {
   const capGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.56, 8);
   capGeo.rotateZ(Math.PI / 2);
   const lugGeo = new THREE.BoxGeometry(0.54, 0.06, 0.5);
-  const fenderGeo = new THREE.CylinderGeometry(0.8, 0.8, 0.66, 16, 1, true, -Math.PI / 2, Math.PI);
-  fenderGeo.rotateZ(Math.PI / 2);
-  const fenderMat = toon(0x3a3d45, { side: THREE.DoubleSide });
+  // Solid wheel arches: a thick half-ring for the front wheels (in the
+  // truck's white), and one flat mudguard over the rear tandem pair.
+  const arch = new THREE.Shape();
+  arch.absarc(0, 0, 0.86, 0, Math.PI, false);
+  arch.lineTo(-0.72, 0);
+  arch.absarc(0, 0, 0.72, Math.PI, 0, true);
+  arch.lineTo(0.86, 0);
+  const archGeo = new THREE.ExtrudeGeometry(arch, { depth: 0.6, bevelEnabled: false, curveSegments: 16 });
+  archGeo.translate(0, 0, -0.3);
+  archGeo.rotateY(Math.PI / 2);
+  for (const sx of [1.3, -1.3]) {
+    const a = shadowy(new THREE.Mesh(archGeo, toon(TRUCK_WHITE)));
+    a.position.set(sx, 0.66, 2.4);
+    body.add(a);
+    // rear mudguard + flaps
+    body.add(box(0.64, 0.1, 2.75, 0x3a3d45, sx, 1.33, -2.25));
+    body.add(box(0.64, 0.24, 0.1, 0x3a3d45, sx, 1.22, -0.92));
+    body.add(box(0.58, 0.6, 0.05, 0x2b2d33, sx, 0.72, -3.62));
+  }
   for (const [z, front] of [[2.4, true], [-1.6, false], [-2.9, false]]) {
     for (const sx of [1.3, -1.3]) {
       const steer = new THREE.Group();
@@ -569,10 +585,6 @@ export function makeTruck() {
       group.add(steer);
       wheels.push(spin);
       if (front) frontWheels.push(steer);
-      const fender = new THREE.Mesh(fenderGeo, fenderMat);
-      fender.position.set(sx, 0.7, z);
-      fender.castShadow = true;
-      body.add(fender);
     }
   }
 
@@ -645,7 +657,7 @@ export function makeTruck() {
   loaderPivot.add(forks);
   for (const s of [1, -1]) {
     forks.add(box(0.3, 0.5, 0.3, 0x55585f, s * 1.75, 0, 0));
-    forks.add(box(0.16, 0.18, 1.8, 0x2b2d33, s * 1.7, 0, 0.9)); // prong
+    forks.add(box(0.16, 0.18, 1.3, 0x2b2d33, s * 1.7, 0, 0.65)); // prong
   }
   const loader = { pivot: loaderPivot, sliders, forks, P: LOADER_P, sliderStart: 2.2 };
 
@@ -1292,6 +1304,14 @@ const CRITTER_SPECIES = {
   bunny: { colors: [0xfafaf6, 0xc9a37f, 0xa8a8b0], word: ['EEP!', 'BOING!'] },
   hedgehog: { colors: [0xe8cfa8], word: ['HUFF!', 'SNORT!'] },
   squirrel: { colors: [0xd0783a, 0x9a6a4a], word: ['CHITTER!', 'NUTS!'] },
+  // Townsfolk: upright, dressed, and with places to be
+  bear: { folk: true, colors: [0x9a6440], word: ['HEY!', 'OOF!', 'MY HAT!'] },
+  fox: { folk: true, colors: [0xff8a3c], word: ['WHOA!', 'MY TIME!', 'YIKES!'] },
+  bunnylady: { folk: true, colors: [0xfafaf6, 0xd8c3a8], word: ['GOODNESS!', 'OH MY!', 'EEK!'] },
+  frog: { folk: true, colors: [0x7cc95a], word: ['RIBBIT!', 'WHEEE!', 'AGAIN!'] },
+  badger: { folk: true, colors: [0x8a8f99], word: ['YOUNG MAN!', 'WELL I NEVER!', 'HMPH!'] },
+  mole: { folk: true, colors: [0x6b6470], word: ['MY MAIL!', 'SIGN HERE!', 'OOF!'] },
+  pig: { folk: true, colors: [0xffb3c1], word: ['MY BUNS!', 'OINK!', 'HEY!'] },
 };
 export const CRITTER_WORDS = Object.fromEntries(Object.entries(CRITTER_SPECIES).map(([k, v]) => [k, v.word]));
 
@@ -1308,120 +1328,232 @@ function cuteEyes(head, r, spread, y, z, scale = 1) {
   }
 }
 
-/** A cute critter. Returns { group, body, head, tail, legs, species }. */
+/** Big shiny eyes in blinkable groups. Returns the two eye groups. */
+function blinkEyes(head, spread, y, z, scale = 1) {
+  const eyes = [];
+  for (const s of [1, -1]) {
+    const eye = new THREE.Group();
+    eye.position.set(spread * s, y, z);
+    const ball = sphere(0.085 * scale, 0x1b1b22, 0, 0, 0, 12);
+    ball.scale.set(1, 1.25, 0.7);
+    eye.add(ball);
+    eye.add(sphere(0.032 * scale, 0xffffff, 0.02 * s * scale, 0.04 * scale, 0.05 * scale, 6));
+    eye.add(sphere(0.016 * scale, 0xffffff, -0.02 * s * scale, -0.03 * scale, 0.055 * scale, 6));
+    head.add(eye);
+    eyes.push(eye);
+    const blush = sphere(0.06 * scale, 0xff9fb5, (spread + 0.09 * scale) * s, y - 0.1 * scale, z - 0.03, 8);
+    blush.scale.set(1.2, 0.6, 0.4);
+    head.add(blush);
+  }
+  return eyes;
+}
+
+/**
+ * A cute critter. Returns { group, body, head, tail, tailSegs, legs, ears, eyes, species }.
+ * Faces +z. body is the posture pivot (hips-ish), legs hang from it.
+ */
 export function makeCritter(species, rand) {
   const spec = CRITTER_SPECIES[species];
+  if (spec.folk) return makeTownsfolk(species, rand);
   const col = spec.colors[(rand() * spec.colors.length) | 0];
+  const light = species === 'kitten' && col === 0x3a3d45 ? 0xf4efe6 : shade(col, 1.15);
   const g = new THREE.Group();
   const body = new THREE.Group();
+  body.position.y = 0.36;
   g.add(body);
-  const S = species === 'hedgehog' ? 0.8 : species === 'squirrel' ? 0.75 : 1;
+  const hedgehog = species === 'hedgehog';
+  const squirrel = species === 'squirrel';
 
-  // Round little body
-  const torso = sphere(0.3, col, 0, 0.36, -0.02, 14);
-  torso.scale.set(0.85, 0.8, 1.05);
+  // Torso: longer than it is tall, with a lighter chest
+  const torso = sphere(0.27, hedgehog ? 0xe8cfa8 : col, 0, 0.06, -0.02, 16);
+  torso.scale.set(0.95, 0.85, 1.3);
   body.add(torso);
-  const belly = sphere(0.2, species === 'kitten' && col === 0x3a3d45 ? 0xf4efe6 : shade(col, 1.12), 0, 0.33, 0.12, 10);
-  belly.scale.set(0.9, 0.9, 0.6);
-  if (species !== 'hedgehog') body.add(belly);
+  if (!hedgehog) {
+    const chest = sphere(0.19, light, 0, 0.12, 0.2, 12);
+    chest.scale.set(1, 1.1, 0.8);
+    body.add(chest);
+  }
 
-  // Stubby legs (animated)
+  // Legs on hip/shoulder pivots so they can swing
   const legs = [];
-  for (const [x, z] of [[0.15, 0.15], [-0.15, 0.15], [0.15, -0.17], [-0.15, -0.17]]) {
+  const legLen = hedgehog ? 0.16 : 0.26;
+  const legCol = hedgehog ? 0x8d6a4a : col;
+  for (const [x, z] of [[0.14, 0.18], [-0.14, 0.18], [0.14, -0.2], [-0.14, -0.2]]) {
     const leg = new THREE.Group();
-    leg.position.set(x, 0.2, z);
-    leg.add(cyl(0.065, 0.07, 0.2, col, 0, -0.1, 0, 8));
-    leg.add(sphere(0.075, shade(col, 0.95), 0, -0.19, 0.02, 8));
+    leg.position.set(x, -0.02, z);
+    leg.add(cyl(0.06, 0.055, legLen, legCol, 0, -legLen / 2, 0, 8));
+    const paw = sphere(0.068, shade(legCol, species === 'dalmatian' ? 1 : 1.08), 0, -legLen, 0.02, 8);
+    paw.scale.set(1, 0.75, 1.25);
+    leg.add(paw);
     body.add(leg);
     legs.push(leg);
   }
+  body.position.y = legLen + 0.07;
 
-  // Big head
+  // Head on a neck pivot
   const head = new THREE.Group();
-  head.position.set(0, 0.74, 0.12);
+  head.position.set(0, hedgehog ? 0.08 : 0.36, hedgehog ? 0.36 : 0.3);
   body.add(head);
-  head.add(sphere(0.34, col, 0, 0, 0, 16));
-  cuteEyes(head, 0.34, 0.13, 0.03, 0.28);
-  // nose + tiny mouth
-  head.add(sphere(0.035, species === 'puppy' || species === 'dalmatian' || species === 'hedgehog' ? 0x2b2b30 : 0xff7f9e, 0, -0.07, 0.335, 8));
-
+  const skull = sphere(0.3, hedgehog ? 0xe8cfa8 : col, 0, 0, 0, 18);
+  skull.scale.set(1.05, 0.95, 0.95);
+  head.add(skull);
+  const eyes = blinkEyes(head, 0.12, 0.03, 0.25);
+  const noseCol = ['puppy', 'dalmatian', 'hedgehog'].includes(species) ? 0x2b2b30 : 0xff7f9e;
+  const ears = [];
   let tail = new THREE.Group();
-  tail.position.set(0, 0.42, -0.3);
+  tail.position.set(0, 0.12, -0.36);
   body.add(tail);
+  const tailSegs = [];
+  // a chain of segments that curves; each segment is a child of the last
+  const chain = (n, r0, r1, len, color, bend) => {
+    let parent = tail;
+    for (let i = 0; i < n; i++) {
+      const seg = new THREE.Group();
+      seg.position.y = i === 0 ? 0 : len;
+      seg.rotation.x = bend;
+      const r = r0 + (r1 - r0) * (i / Math.max(1, n - 1));
+      const m = sphere(r, color, 0, len / 2, 0, 10);
+      m.scale.set(1, (len / (2 * r)) * 1.25, 1);
+      seg.add(m);
+      parent.add(seg);
+      tailSegs.push(seg);
+      parent = seg;
+    }
+    return parent;
+  };
 
   if (species === 'kitten') {
-    for (const s of [1, -1]) {
-      const ear = cone(0.15, 0.3, col, 0.2 * s, 0.3, -0.02, 4);
-      ear.rotation.set(-0.15, Math.PI / 4, -0.35 * s);
-      head.add(ear);
-      const inner = cone(0.08, 0.17, 0xff9fb5, 0.19 * s, 0.29, 0.05, 4);
-      inner.rotation.set(-0.15, Math.PI / 4, -0.35 * s);
-      head.add(inner);
-    }
-    if (col === 0xffa65c) for (const y of [0.18, 0.25]) head.add(box(0.12, 0.03, 0.05, 0xe07b2c, 0, y, 0.27)); // tabby stripes
-    const t1 = cyl(0.05, 0.06, 0.45, col, 0, 0.2, 0, 8);
-    t1.rotation.x = -0.4;
-    tail.add(t1);
-    tail.add(sphere(0.065, col, 0, 0.42, -0.1, 8));
-  } else if (species === 'puppy' || species === 'dalmatian') {
-    const muzzle = sphere(0.14, species === 'dalmatian' ? 0xfafaf6 : 0xf4efe6, 0, -0.08, 0.25, 10);
-    muzzle.scale.set(1.2, 0.8, 0.8);
+    head.add(sphere(0.035, noseCol, 0, -0.07, 0.29, 8));
+    const muzzle = sphere(0.1, light, 0, -0.1, 0.22, 10);
+    muzzle.scale.set(1.3, 0.75, 0.8);
     head.add(muzzle);
-    head.children.find((m) => m.geometry?.parameters?.radius === 0.035)?.position.set(0, -0.05, 0.37);
-    const earCol = species === 'dalmatian' ? 0x2b2b30 : shade(col, 0.7);
     for (const s of [1, -1]) {
-      const ear = sphere(0.14, earCol, 0.31 * s, 0.0, -0.02, 10);
-      ear.scale.set(0.5, 1.45, 0.85);
-      ear.rotation.z = 0.45 * s;
+      const ear = new THREE.Group();
+      ear.position.set(0.17 * s, 0.22, -0.02);
+      ear.rotation.z = -0.3 * s;
+      const outer = cone(0.13, 0.26, col, 0, 0.1, 0, 4);
+      outer.rotation.y = Math.PI / 4;
+      ear.add(outer);
+      const inner = cone(0.07, 0.15, 0xff9fb5, 0, 0.07, 0.05, 4);
+      inner.rotation.y = Math.PI / 4;
+      ear.add(inner);
       head.add(ear);
+      ears.push(ear);
+      for (const k of [-1, 1]) {
+        const w = cyl(0.006, 0.006, 0.22, 0xffffff, s * 0.2, -0.09 + k * 0.025, 0.22, 3);
+        w.rotation.z = Math.PI / 2 + k * 0.15 * s;
+        head.add(w);
+      }
     }
-    tail.add(cyl(0.04, 0.06, 0.3, col, 0, 0.14, 0, 6));
-    tail.rotation.x = -0.6;
+    if (col === 0xffa65c) for (const z of [-0.12, 0.02]) body.add(box(0.36, 0.05, 0.06, 0xe07b2c, 0, 0.29, z)); // tabby stripes
+    tail.position.set(0, 0.16, -0.36);
+    tail.rotation.x = -0.9;
+    chain(5, 0.05, 0.045, 0.13, col, 0.32);
+  } else if (species === 'puppy' || species === 'dalmatian') {
+    const muzzle = sphere(0.13, species === 'dalmatian' ? 0xfafaf6 : light, 0, -0.08, 0.22, 10);
+    muzzle.scale.set(1.2, 0.8, 0.9);
+    head.add(muzzle);
+    head.add(sphere(0.045, noseCol, 0, -0.04, 0.34, 8));
+    const tongue = sphere(0.04, 0xff7f9e, 0, -0.17, 0.27, 6);
+    tongue.scale.set(1, 0.5, 1);
+    head.add(tongue);
+    const earCol = species === 'dalmatian' ? 0x2b2b30 : shade(col, 0.72);
+    for (const s of [1, -1]) {
+      const ear = new THREE.Group();
+      ear.position.set(0.25 * s, 0.12, -0.02);
+      const flap = sphere(0.1, earCol, 0, -0.1, 0, 10);
+      flap.scale.set(0.45, 1.25, 0.85);
+      ear.add(flap);
+      ear.rotation.z = 0.25 * s;
+      head.add(ear);
+      ears.push(ear);
+    }
+    tail.position.set(0, 0.16, -0.36);
+    tail.rotation.x = -0.5;
+    chain(2, 0.05, 0.04, 0.14, col, 0.25);
     if (species === 'dalmatian') {
-      for (const [x, y, z, r] of [[0.15, 0.45, -0.05, 0.07], [-0.12, 0.4, -0.2, 0.06], [0.05, 0.5, 0.1, 0.05], [-0.18, 0.3, 0.05, 0.05]]) body.add(sphere(r, 0x2b2b30, x, y, z, 6));
-      head.add(sphere(0.06, 0x2b2b30, 0.15, 0.2, 0.22, 6));
-      // fire-department collar
-      body.add(cyl(0.19, 0.19, 0.05, 0xe63946, 0, 0.55, 0.1, 12));
+      for (const [x, y, z, r] of [[0.16, 0.22, -0.1, 0.07], [-0.14, 0.2, -0.24, 0.06], [0.05, 0.3, 0.04, 0.05], [-0.2, 0.08, 0.08, 0.05], [0.2, 0.0, -0.25, 0.05]]) body.add(sphere(r, 0x2b2b30, x, y, z, 6));
+      head.add(sphere(0.055, 0x2b2b30, 0.15, 0.18, 0.18, 6));
+      const collar = cyl(0.17, 0.17, 0.05, 0xe63946, 0, 0.27, 0.22, 14);
+      collar.rotation.x = 0.5;
+      body.add(collar);
+      const tag = cyl(0.04, 0.04, 0.02, 0xffd23f, 0, 0.17, 0.36, 8);
+      tag.rotation.x = Math.PI / 2;
+      body.add(tag);
     }
   } else if (species === 'bunny') {
+    head.add(sphere(0.03, noseCol, 0, -0.06, 0.29, 8));
+    const muzzle = sphere(0.09, light, 0, -0.1, 0.23, 10);
+    muzzle.scale.set(1.3, 0.75, 0.8);
+    head.add(muzzle);
+    head.add(box(0.06, 0.05, 0.02, 0xffffff, 0, -0.17, 0.28)); // buck teeth
     for (const s of [1, -1]) {
-      const ear = sphere(0.09, col, 0.12 * s, 0.42, -0.04, 10);
-      ear.scale.set(0.7, 2.6, 0.5);
-      ear.rotation.z = -0.12 * s;
+      const ear = new THREE.Group();
+      ear.position.set(0.1 * s, 0.24, -0.04);
+      ear.rotation.z = -0.15 * s;
+      const outer = sphere(0.085, col, 0, 0.2, 0, 10);
+      outer.scale.set(0.75, 2.6, 0.5);
+      ear.add(outer);
+      const inner = sphere(0.05, 0xff9fb5, 0, 0.2, 0.03, 8);
+      inner.scale.set(0.6, 2.5, 0.3);
+      ear.add(inner);
       head.add(ear);
-      const inner = sphere(0.05, 0xff9fb5, 0.12 * s, 0.42, 0.0, 8);
-      inner.scale.set(0.6, 2.4, 0.3);
-      inner.rotation.z = -0.12 * s;
-      head.add(inner);
+      ears.push(ear);
     }
-    tail.add(sphere(0.12, 0xffffff, 0, 0, -0.05, 10));
-  } else if (species === 'hedgehog') {
-    // spiky back
+    tail.add(sphere(0.11, 0xffffff, 0, 0, -0.03, 10));
+    // big back feet
+    for (const l of legs.slice(2)) l.children[1].scale.set(1.2, 0.75, 1.8);
+  } else if (hedgehog) {
+    // spiky dome over the back
     const spikeCol = 0x6b4a2f;
-    for (let i = 0; i < 22; i++) {
-      const a = (i / 22) * Math.PI * 2;
-      const row = i % 2;
-      const sp = cone(0.07, 0.24, spikeCol, Math.cos(a) * 0.22, 0.44 + row * 0.12, -0.05 + Math.sin(a) * 0.22 - 0.05, 4);
-      sp.rotation.set(-Math.sin(a) * 0.9 - 0.4, 0, -Math.cos(a) * 0.9);
+    const dome = sphere(0.3, spikeCol, 0, 0.12, -0.06, 14);
+    dome.scale.set(1.05, 0.9, 1.3);
+    body.add(dome);
+    const ico = new THREE.IcosahedronGeometry(1, 1);
+    const pos = ico.attributes.position;
+    const seen = new Set();
+    for (let i = 0; i < pos.count; i++) {
+      const v = new THREE.Vector3().fromBufferAttribute(pos, i);
+      const key = v.toArray().map((n) => n.toFixed(2)).join();
+      if (seen.has(key) || v.y < -0.15 || v.z > 0.75) continue;
+      seen.add(key);
+      const sp = cone(0.07, 0.24, i % 3 ? spikeCol : 0xd9c3a0, 0, 0, 0, 4);
+      sp.position.set(v.x * 0.3, 0.12 + v.y * 0.27, -0.06 + v.z * 0.38);
+      sp.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), v.normalize());
       body.add(sp);
     }
-    const back = sphere(0.36, spikeCol, 0, 0.45, -0.12, 10);
-    back.scale.set(0.95, 0.85, 1.0);
-    body.add(back);
-    head.position.set(0, 0.48, 0.2);
-    head.scale.setScalar(0.75);
-  } else if (species === 'squirrel') {
-    for (const s of [1, -1]) head.add(cone(0.07, 0.16, col, 0.17 * s, 0.3, -0.02, 6));
-    // big bushy tail curling up behind
-    const t = [[0, 0.1, -0.15, 0.17], [0, 0.35, -0.3, 0.2], [0, 0.65, -0.28, 0.21], [0, 0.88, -0.12, 0.18]];
-    for (const [x, y, z, r] of t) tail.add(sphere(r, shade(col, 1.1), x, y, z, 10));
-    // acorn snack
-    body.add(sphere(0.07, 0x9a6a4a, 0, 0.5, 0.33, 8));
-    body.add(sphere(0.06, 0x5a3a20, 0, 0.56, 0.33, 8));
+    // pointy snout with a button nose
+    head.scale.setScalar(0.72);
+    const snout = cone(0.15, 0.32, 0xe8cfa8, 0, -0.06, 0.32, 10);
+    snout.rotation.x = Math.PI / 2;
+    head.add(snout);
+    head.add(sphere(0.06, noseCol, 0, -0.06, 0.48, 8));
+    for (const s of [1, -1]) head.add(sphere(0.07, 0xd9b48a, 0.19 * s, 0.2, -0.04, 8));
+  } else if (squirrel) {
+    head.add(sphere(0.03, noseCol, 0, -0.06, 0.29, 8));
+    const muzzle = sphere(0.1, light, 0, -0.1, 0.22, 10);
+    muzzle.scale.set(1.3, 0.75, 0.8);
+    head.add(muzzle);
+    for (const s of [1, -1]) {
+      const ear = new THREE.Group();
+      ear.position.set(0.16 * s, 0.24, -0.04);
+      ear.add(cone(0.07, 0.17, col, 0, 0.08, 0, 6));
+      ear.add(cone(0.02, 0.08, shade(col, 0.8), 0, 0.2, 0, 4)); // tufts
+      head.add(ear);
+      ears.push(ear);
+    }
+    // a big smooth bushy plume curling up behind
+    tail.position.set(0, 0.06, -0.38);
+    tail.rotation.x = -1.15;
+    chain(7, 0.13, 0.17, 0.12, shade(col, 1.08), 0.32);
+    // holding an acorn
+    body.add(sphere(0.07, 0x9a6a4a, 0, 0.1, 0.36, 8));
+    body.add(sphere(0.06, 0x5a3a20, 0, 0.15, 0.36, 8));
   }
+  const S = hedgehog ? 0.85 : squirrel ? 0.8 : 1;
   g.scale.setScalar(S * 1.1);
   addOutline(g, 0.02);
-  return { group: g, body, head, tail, legs, species };
+  return { group: g, body, head, tail, tailSegs, legs, ears, eyes, species, baseY: body.position.y };
 }
 
 /** A cute (but deeply unbothered) goose. Returns { group, neck, body }. */
@@ -1697,6 +1829,7 @@ export function makeScarecrow() {
 
 export function makeCabbage() {
   const g = new THREE.Group();
+  g.scale.setScalar(1.5);
   g.add(sphere(0.32, 0x9fd86b, 0, 0.3, 0, 10));
   for (let i = 0; i < 5; i++) {
     const a = (i / 5) * Math.PI * 2;
@@ -1710,6 +1843,7 @@ export function makeCabbage() {
 
 export function makePumpkin() {
   const g = new THREE.Group();
+  g.scale.setScalar(1.5);
   for (let i = 0; i < 6; i++) {
     const a = (i / 6) * Math.PI * 2;
     const lobe = sphere(0.3, 0xff8c2a, Math.cos(a) * 0.14, 0.3, Math.sin(a) * 0.14, 10);
@@ -1743,13 +1877,312 @@ export function makeSunflower() {
 
 export function makeCarrots() {
   const g = new THREE.Group();
-  for (const x of [-0.25, 0.25]) {
-    g.add(cone(0.1, 0.18, 0xff8c2a, x, 0.05, 0, 8));
-    for (let i = 0; i < 3; i++) {
-      const top = cone(0.05, 0.4, 0x5cb84a, x + (i - 1) * 0.06, 0.3, 0, 4);
-      top.rotation.z = (i - 1) * 0.3;
+  for (const x of [-0.3, 0.3]) {
+    // the carrot pokes out of the soil, with a big leafy top
+    const c = cone(0.16, 0.5, 0xff8c2a, x, 0.12, 0, 10);
+    c.rotation.x = Math.PI;
+    g.add(c);
+    for (let i = 0; i < 4; i++) {
+      const top = cone(0.07, 0.6, 0x5cb84a, x + (i - 1.5) * 0.05, 0.62, 0, 5);
+      top.rotation.z = (i - 1.5) * 0.35;
       g.add(top);
     }
   }
   return g;
+}
+
+let chainTex = null;
+/** One 3-wide section of chain-link fence (runs along x), with a post at -x. */
+export function makeChainFence() {
+  if (!chainTex) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d');
+    g.strokeStyle = '#d5d9df';
+    g.lineWidth = 3;
+    g.beginPath();
+    g.moveTo(0, 0);
+    g.lineTo(64, 64);
+    g.moveTo(64, 0);
+    g.lineTo(0, 64);
+    g.stroke();
+    chainTex = new THREE.CanvasTexture(c);
+    chainTex.wrapS = chainTex.wrapT = THREE.RepeatWrapping;
+    chainTex.repeat.set(6, 3.6);
+    chainTex.anisotropy = 4;
+  }
+  const g = new THREE.Group();
+  const mesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(3, 1.8),
+    new THREE.MeshToonMaterial({ map: chainTex, gradientMap: gradient, alphaTest: 0.5, side: THREE.DoubleSide, color: 0xc9ccd3 }),
+  );
+  mesh.position.y = 1.1;
+  g.add(mesh);
+  g.add(cyl(0.09, 0.09, 2.2, 0x9aa0a8, -1.5, 1.1, 0, 8));
+  const rail = cyl(0.05, 0.05, 3, 0x9aa0a8, 0, 2.02, 0, 6);
+  rail.rotation.z = Math.PI / 2;
+  g.add(rail);
+  const bottom = cyl(0.03, 0.03, 3, 0x9aa0a8, 0, 0.2, 0, 6);
+  bottom.rotation.z = Math.PI / 2;
+  g.add(bottom);
+  return g;
+}
+
+// ---------------------------------------------------------------------------
+// Townsfolk: anthropomorphic neighbors on two legs. Faces +z, feet at y = 0.
+// Returns the same shape as makeCritter plus { arms, biped: true }.
+// ---------------------------------------------------------------------------
+const FOLK = {
+  bear: { top: 0x3d7ea6, pants: 0x3d7ea6, shoe: 0x5a3a28, light: 0xe8c9a0, girth: 1.18, height: 1.08 },
+  fox: { top: 0x6c5ce7, pants: 0x6c5ce7, shoe: 0xfafaf6, light: 0xfafaf6, girth: 0.9, height: 1.0 },
+  bunnylady: { top: 0xffb3c1, pants: null, shoe: 0xd9534f, light: 0xfff4f0, girth: 0.95, height: 0.98 },
+  frog: { top: 0xffd23f, pants: 0x3d7ea6, shoe: 0xd9534f, light: 0xd8f0b8, girth: 0.9, height: 0.8 },
+  badger: { top: 0xb5543c, pants: 0x55585f, shoe: 0x2b2d33, light: 0xfafaf6, girth: 1.0, height: 0.92 },
+  mole: { top: 0x3d6fa5, pants: 0x2f4f7a, shoe: 0x2b2d33, light: 0xffb3c1, girth: 1.02, height: 0.9 },
+  pig: { top: 0xfafaf6, pants: 0x8a8f99, shoe: 0x5a3a28, light: 0xff9fb5, girth: 1.12, height: 1.0 },
+};
+
+export function makeTownsfolk(kind, rand) {
+  const spec = CRITTER_SPECIES[kind];
+  const F = FOLK[kind];
+  const fur = spec.colors[(rand() * spec.colors.length) | 0];
+  const g = new THREE.Group();
+  const body = new THREE.Group();
+  body.position.y = 0.62;
+  g.add(body);
+  const G = F.girth;
+
+  // Legs from the hips, with shoes
+  const legs = [];
+  for (const s of [1, -1]) {
+    const leg = new THREE.Group();
+    leg.position.set(0.13 * G * s, 0, 0);
+    leg.add(cyl(0.085, 0.08, 0.5, F.pants ?? fur, 0, -0.25, 0, 10));
+    const shoe = sphere(0.1, F.shoe, 0, -0.55, 0.05, 10);
+    shoe.scale.set(1, 0.65, 1.5);
+    leg.add(shoe);
+    body.add(leg);
+    legs.push(leg);
+  }
+  // Torso in clothes
+  const torso = cyl(0.27 * G, 0.33 * G, 0.6, F.top, 0, 0.3, 0, 16);
+  body.add(torso);
+  const shoulders = sphere(0.27 * G, F.top, 0, 0.6, 0, 14);
+  shoulders.scale.set(1, 0.55, 0.9);
+  body.add(shoulders);
+  if (kind === 'bunnylady') {
+    const skirt = cone(0.42, 0.55, F.top, 0, 0.02, 0, 16);
+    body.add(skirt);
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      body.add(sphere(0.045, 0xffffff, Math.cos(a) * 0.3, 0.12, Math.sin(a) * 0.3, 6)); // polka dots
+    }
+  }
+  // Arms from the shoulders, with paws
+  const arms = [];
+  for (const s of [1, -1]) {
+    const arm = new THREE.Group();
+    arm.position.set(0.31 * G * s, 0.56, 0);
+    arm.rotation.z = 0.12 * s;
+    const sleeve = kind === 'bear' || kind === 'pig' || kind === 'frog' ? fur : F.top; // short sleeves show fur
+    arm.add(cyl(0.075, 0.07, 0.46, sleeve, 0, -0.23, 0, 8));
+    arm.add(sphere(0.085, fur, 0, -0.48, 0, 8));
+    body.add(arm);
+    arms.push(arm);
+  }
+
+  // Head
+  const head = new THREE.Group();
+  head.position.set(0, 1.03, 0.02);
+  head.scale.setScalar(1.22); // big heads, like everyone else in Binsville
+  body.add(head);
+  const frog = kind === 'frog';
+  const skull = sphere(0.33, fur, 0, 0, 0, 18);
+  skull.scale.set(frog ? 1.25 : 1.05, frog ? 0.8 : 0.95, 0.95);
+  head.add(skull);
+  const ears = [];
+  let eyes;
+  const muzzle = (col, z = 0.24, w = 1.25) => {
+    const m = sphere(0.12, col, 0, -0.1, z, 10);
+    m.scale.set(w, 0.78, 0.9);
+    head.add(m);
+  };
+  const tail = new THREE.Group();
+  tail.position.set(0, 0.12, -0.3);
+  body.add(tail);
+  const tailSegs = [];
+
+  if (kind === 'bear') {
+    muzzle(F.light);
+    head.add(sphere(0.05, 0x2b2b30, 0, -0.06, 0.34, 8));
+    eyes = blinkEyes(head, 0.13, 0.05, 0.26);
+    for (const s of [1, -1]) {
+      const ear = sphere(0.1, fur, 0.24 * s, 0.24, -0.02, 10);
+      ear.scale.z = 0.6;
+      head.add(ear);
+      ears.push(ear);
+    }
+    // overalls straps + straw hat
+    for (const s of [1, -1]) body.add(box(0.07, 0.4, 0.05, 0x2f5f86, 0.14 * s, 0.5, 0.3 * G));
+    body.add(box(0.36, 0.26, 0.06, 0x3d7ea6, 0, 0.3, 0.31 * G));
+    head.add(cyl(0.48, 0.48, 0.04, 0xf2d17e, 0, 0.24, 0, 18));
+    head.add(cyl(0.24, 0.28, 0.22, 0xf2d17e, 0, 0.36, 0, 14));
+    head.add(cyl(0.285, 0.285, 0.06, 0xd9534f, 0, 0.29, 0, 14));
+    tail.add(sphere(0.08, fur, 0, 0, -0.02, 8));
+  } else if (kind === 'fox') {
+    const snout = cone(0.13, 0.3, F.light, 0, -0.08, 0.32, 10);
+    snout.rotation.x = Math.PI / 2;
+    head.add(snout);
+    head.add(sphere(0.045, 0x2b2b30, 0, -0.08, 0.47, 8));
+    eyes = blinkEyes(head, 0.13, 0.05, 0.25);
+    for (const s of [1, -1]) {
+      const ear = new THREE.Group();
+      ear.position.set(0.17 * s, 0.25, -0.02);
+      ear.rotation.z = -0.25 * s;
+      ear.add(cone(0.12, 0.3, fur, 0, 0.12, 0, 4));
+      ear.add(cone(0.06, 0.16, 0x2b2b30, 0, 0.21, 0.02, 4));
+      head.add(ear);
+      ears.push(ear);
+    }
+    head.add(cyl(0.34, 0.34, 0.07, 0xff6b9d, 0, 0.14, 0, 16)); // sweatband
+    body.add(box(0.04, 0.55, 0.02, 0xfafaf6, 0.27 * G, 0.3, 0)); // tracksuit stripes
+    body.add(box(0.04, 0.55, 0.02, 0xfafaf6, -0.27 * G, 0.3, 0));
+    tail.rotation.x = -0.9;
+    let parent = tail;
+    for (let i = 0; i < 4; i++) {
+      const seg = new THREE.Group();
+      seg.position.y = i ? 0.14 : 0;
+      seg.rotation.x = 0.2;
+      const m = sphere(0.1 + i * 0.015, i === 3 ? 0xfafaf6 : fur, 0, 0.08, 0, 10);
+      m.scale.y = 1.2;
+      seg.add(m);
+      parent.add(seg);
+      tailSegs.push(seg);
+      parent = seg;
+    }
+  } else if (kind === 'bunnylady') {
+    muzzle(F.light, 0.24, 1.2);
+    head.add(sphere(0.035, 0xff7f9e, 0, -0.06, 0.32, 8));
+    eyes = blinkEyes(head, 0.12, 0.04, 0.26);
+    for (const s of [1, -1]) {
+      const ear = new THREE.Group();
+      ear.position.set(0.1 * s, 0.26, -0.04);
+      ear.rotation.z = -0.15 * s;
+      const o = sphere(0.085, fur, 0, 0.22, 0, 10);
+      o.scale.set(0.75, 2.7, 0.5);
+      ear.add(o);
+      const inn = sphere(0.05, 0xff9fb5, 0, 0.22, 0.03, 8);
+      inn.scale.set(0.6, 2.6, 0.3);
+      ear.add(inn);
+      head.add(ear);
+      ears.push(ear);
+    }
+    // bow between the ears, and a handbag
+    head.add(sphere(0.06, 0xd9534f, 0, 0.3, 0.05, 8));
+    for (const s of [1, -1]) {
+      const lobe = sphere(0.08, 0xd9534f, 0.09 * s, 0.3, 0.05, 8);
+      lobe.scale.set(1.2, 0.8, 0.6);
+      head.add(lobe);
+    }
+    arms[1].add(box(0.2, 0.18, 0.1, 0xd9534f, 0, -0.62, 0.04));
+    arms[1].add(cyl(0.015, 0.015, 0.16, 0x2b2d33, 0, -0.5, 0.04, 4));
+    tail.add(sphere(0.1, 0xffffff, 0, -0.1, -0.06, 8));
+  } else if (frog) {
+    // big mouth, eyes on top, cap, backpack
+    const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.018, 4, 16, Math.PI), toon(0x2b2b30));
+    mouth.position.set(0, -0.06, 0.29);
+    mouth.rotation.set(-0.2, 0, Math.PI);
+    head.add(mouth);
+    for (const s of [1, -1]) head.add(sphere(0.13, fur, 0.17 * s, 0.24, 0.08, 10));
+    eyes = blinkEyes(head, 0.17, 0.27, 0.19, 0.95);
+    const cap = sphere(0.31, 0xd9534f, 0, 0.14, -0.08, 14);
+    cap.scale.set(1, 0.45, 1);
+    head.add(cap);
+    const brim = cyl(0.22, 0.22, 0.03, 0xd9534f, 0, 0.12, 0.28, 14);
+    brim.scale.z = 0.6;
+    head.add(brim);
+    body.add(box(0.34, 0.4, 0.18, 0x2d936c, 0, 0.38, -0.32));
+    body.add(box(0.26, 0.14, 0.04, 0x247a59, 0, 0.3, -0.42));
+  } else if (kind === 'badger') {
+    muzzle(F.light, 0.25, 1.1);
+    head.add(sphere(0.045, 0x2b2b30, 0, -0.07, 0.35, 8));
+    // the stripes: white blaze down the middle, dark bands over the eyes
+    for (const s of [1, -1]) {
+      const band = sphere(0.14, 0x2b2b30, 0.15 * s, 0.07, 0.17, 10);
+      band.scale.set(0.7, 1.6, 0.7);
+      head.add(band);
+    }
+    const blaze = sphere(0.1, 0xfafaf6, 0, 0.13, 0.2, 10);
+    blaze.scale.set(0.7, 1.9, 0.9);
+    head.add(blaze);
+    eyes = blinkEyes(head, 0.13, 0.04, 0.27);
+    for (const s of [1, -1]) {
+      const ear = sphere(0.07, 0xfafaf6, 0.25 * s, 0.2, -0.04, 8);
+      head.add(ear);
+      ears.push(ear);
+      // reading glasses
+      const lens = new THREE.Mesh(new THREE.TorusGeometry(0.075, 0.012, 4, 14), toon(0xc9a35a));
+      lens.position.set(0.13 * s, 0.04, 0.32);
+      head.add(lens);
+    }
+    // grey bun, cardigan buttons, and a cane
+    head.add(sphere(0.12, 0xd5d9df, 0, 0.3, -0.12, 10));
+    for (let i = 0; i < 3; i++) body.add(sphere(0.025, 0xffd23f, 0, 0.5 - i * 0.15, 0.32, 6));
+    arms[0].add(cyl(0.025, 0.025, 0.85, 0x8e5b3d, 0, -0.85, 0.08, 6));
+    tail.add(sphere(0.08, fur, 0, 0, -0.02, 8));
+  } else if (kind === 'mole') {
+    // pink star nose, tiny eyes, mail cap and bag
+    head.add(sphere(0.09, 0xff9fb5, 0, -0.06, 0.33, 10));
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      head.add(sphere(0.035, 0xff9fb5, Math.cos(a) * 0.08, -0.06 + Math.sin(a) * 0.08, 0.36, 6));
+    }
+    eyes = blinkEyes(head, 0.14, 0.09, 0.26, 0.75);
+    head.add(cyl(0.3, 0.32, 0.18, 0x2f4f7a, 0, 0.27, -0.02, 14));
+    const brim = cyl(0.2, 0.2, 0.03, 0x2b2d33, 0, 0.2, 0.22, 12);
+    brim.scale.z = 0.6;
+    head.add(brim);
+    head.add(box(0.1, 0.07, 0.02, 0xffd23f, 0, 0.29, 0.3));
+    const bag = box(0.34, 0.3, 0.14, 0x8e5b3d, 0.33 * G, 0.22, 0.05);
+    body.add(bag);
+    const strap = box(0.05, 0.85, 0.04, 0x6b4430, 0.05, 0.42, 0.3 * G);
+    strap.rotation.z = 0.7;
+    body.add(strap);
+    for (const s of [1, -1]) arms[s > 0 ? 0 : 1].children[1].scale.set(1.5, 0.8, 1.2); // digging paws
+  } else if (kind === 'pig') {
+    const snout = cyl(0.11, 0.12, 0.08, F.light, 0, -0.06, 0.32, 14);
+    snout.rotation.x = Math.PI / 2;
+    head.add(snout);
+    for (const s of [1, -1]) head.add(sphere(0.025, 0xc45d74, 0.04 * s, -0.06, 0.37, 6));
+    eyes = blinkEyes(head, 0.14, 0.08, 0.25);
+    for (const s of [1, -1]) {
+      const ear = cone(0.09, 0.17, fur, 0.21 * s, 0.25, 0, 4);
+      ear.rotation.set(0.5, 0, -0.4 * s);
+      head.add(ear);
+      ears.push(ear);
+    }
+    // chef's hat, apron, a baguette under one arm
+    head.add(cyl(0.22, 0.2, 0.2, 0xffffff, 0, 0.34, -0.03, 14));
+    const puff = sphere(0.28, 0xffffff, 0, 0.5, -0.03, 14);
+    puff.scale.set(1, 0.6, 1);
+    head.add(puff);
+    body.add(box(0.42, 0.55, 0.04, 0xffffff, 0, 0.26, 0.32 * G));
+    const bread = cyl(0.06, 0.06, 0.7, 0xd9a05b, 0, -0.35, 0.14, 8);
+    bread.rotation.x = 1.2;
+    arms[1].add(bread);
+    // curly tail
+    let parent = tail;
+    for (let i = 0; i < 4; i++) {
+      const seg = new THREE.Group();
+      seg.position.y = i ? 0.06 : 0;
+      seg.rotation.set(0.9, 0.6, 0);
+      seg.add(sphere(0.035, fur, 0, 0.03, 0, 6));
+      parent.add(seg);
+      tailSegs.push(seg);
+      parent = seg;
+    }
+  }
+  g.scale.set(1.3 * G * 0.92, 1.3 * F.height, 1.3 * G * 0.92);
+  addOutline(g, 0.018);
+  return { group: g, body, head, tail, tailSegs, legs, arms, ears, eyes, species: kind, baseY: 0.62, biped: true };
 }

@@ -42,12 +42,11 @@ You have one four-minute shift (the countdown is top-left; the sun sets as it ru
   scatter when you roll up, and trees and bushes burst into leaves when you bump them.
 - **Geese:** they wander the streets and they do not move. Not for you, not for anyone. Hit one
   and the truck bounces off, spills cargo, and gets honked at. Honk at them and they honk back.
-- **Citizens:** kittens, puppies, bunnies, hedgehogs, squirrels and the firehouse dalmatian go
-  about their day and try to get out of Steve's way. Bounce one and it costs a few points.
+- **Townsfolk:** Binsville's residents are out and about: a bear farmer, a fox jogger, a bunny
+  lady, a frog kid, a badger granny, a mole mail carrier and a pig baker, plus kittens, a puppy,
+  squirrels, garden bunnies and the firehouse dalmatian. They wave at Steve when he's driving
+  politely and run for it (arms flailing) when he isn't. Bounce one and it costs a few points.
   Honk (**H**) to make them jump. Mailboxes and hydrants also cost points.
-- **Trees:** hit one hard, or a few times, and it comes down. TIMBERRRRR!
-- **Steve cam:** a live view of Steve's face sits in the corner. When he turns red and shaky,
-  he's hangry: feed him (or click/tap his face).
 - **Around town:** the Rusty Lid bar, Binsville Elementary, Fire Station 9, a community garden
   (whose vegetables are very much in harm's way), parks, the plaza and The Dump.
 

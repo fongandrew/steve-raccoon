@@ -11,7 +11,8 @@ export class PropBatch {
     template.traverse((o) => {
       if (!o.isMesh) return;
       const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
-      for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k);
+      const keep = o.material.map ? ['position', 'normal', 'uv'] : ['position', 'normal'];
+      for (const k of Object.keys(g.attributes)) if (!keep.includes(k)) g.deleteAttribute(k);
       g.clearGroups();
       g.applyMatrix4(o.matrixWorld);
       if (!buckets.has(o.material)) buckets.set(o.material, []);
