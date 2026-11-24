@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>Steve Raccoon</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦝</text></svg>" />
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <div id="game"></div>
+
+    <div id="hud" class="hidden">
+      <div id="stats">
+        <div class="stat"><span class="label">Score</span><span id="score">0</span></div>
+        <div class="stat"><span class="label">Clock</span><span id="clock">6:00 AM</span></div>
+        <div class="meter">
+          <span class="label">🗑️ Load <b id="loadText">0/12</b></span>
+          <div class="bar"><div id="loadBar" class="fill load"></div></div>
+        </div>
+        <div class="meter">
+          <span class="label">🍕 Tummy <b id="hungerText"></b></span>
+          <div class="bar"><div id="hungerBar" class="fill hunger"></div></div>
+        </div>
+        <div id="status"></div>
+      </div>
+      <canvas id="minimap" width="200" height="200"></canvas>
+      <div id="toast"></div>
+      <div id="popups"></div>
+      <div id="hint">WASD / Arrows: drive · Space: drift · E: snack · H: honk · R: unstick · P: pause · M: mute</div>
+      <div id="touch">
+        <div class="pad left">
+          <button data-key="left">◀</button>
+          <button data-key="right">▶</button>
+        </div>
+        <div class="pad right">
+          <button data-key="snack" class="small">🍕</button>
+          <button data-key="honk" class="small">📯</button>
+          <button data-key="drift" class="small">💨</button>
+          <button data-key="brake">⏪</button>
+          <button data-key="gas">⏩</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="title" class="overlay">
+      <div class="card">
+        <div class="logo">🦝🚛</div>
+        <h1>Steve Raccoon</h1>
+        <p class="tagline">It's a lovely day and you're a raccoon driving a trash truck.</p>
+        <ul class="howto">
+          <li><b>Stop near</b> glowing trash cans to grab them with the claw.</li>
+          <li>Haul full loads to <b>The Dump</b> to cash in. Full loads pay extra!</li>
+          <li>Steve gets <b>hungry</b>. Press <kbd>E</kbd> to snack on the cargo. Results may vary.</li>
+          <li><b>Golden cans</b> are fancy. Hit the <b>jumps</b> in the parks for style points.</li>
+          <li>Please don't bonk the cats. <kbd>H</kbd> honks them out of the way.</li>
+        </ul>
+        <button id="startBtn" class="big">Start Shift</button>
+        <p id="best" class="small"></p>
+      </div>
+    </div>
+
+    <div id="pause" class="overlay hidden">
+      <div class="card">
+        <h2>Coffee Break ☕</h2>
+        <p>Steve is staring at a pigeon.</p>
+        <button id="resumeBtn" class="big">Back to Work</button>
+      </div>
+    </div>
+
+    <div id="results" class="overlay hidden">
+      <div class="card">
+        <h2>Shift Over!</h2>
+        <div id="stars"></div>
+        <p id="rank"></p>
+        <table id="resultTable"></table>
+        <p id="newBest" class="hidden">✨ New personal best! ✨</p>
+        <button id="againBtn" class="big">Another Shift</button>
+      </div>
+    </div>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
