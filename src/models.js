@@ -277,7 +277,7 @@ export function makeTruck() {
     body.add(box(0.35, 0.08, 0.6, CHROME, sx * 1.1, 0.85, 1.35));
   }
 
-  // --- Cab: Steve pokes out of a big sunroof ---
+  // --- Cab: Steve leans out of the driver's window ---
   const cabZ = 2.45;
   body.add(box(2.7, 1.0, 1.9, TRUCK_WHITE, 0, 1.65, cabZ)); // lower cab
   body.add(box(2.74, 0.14, 1.94, TRUCK_GREEN, 0, 1.95, cabZ)); // green waistline stripe
@@ -294,28 +294,25 @@ export function makeTruck() {
     body.add(box(0.12, 0.98, 0.12, TRUCK_WHITE, sx, 2.64, cabZ - 0.89));
   }
   body.add(box(2.7, 0.98, 0.1, TRUCK_WHITE, 0, 2.64, cabZ - 0.92));
-  // Roof ring (sunroof hole in the middle)
-  body.add(box(2.76, 0.16, 0.5, TRUCK_WHITE, 0, 3.17, cabZ + 0.72));
-  body.add(box(2.76, 0.16, 0.36, TRUCK_WHITE, 0, 3.17, cabZ - 0.8));
-  body.add(box(0.48, 0.16, 1.96, TRUCK_WHITE, 1.14, 3.17, cabZ));
-  body.add(box(0.48, 0.16, 1.96, TRUCK_WHITE, -1.14, 3.17, cabZ));
-  // Glass: windshield + passenger window. Driver window is rolled down (tail).
+  // Roof with a little visor over the windshield
+  body.add(box(2.76, 0.16, 1.96, TRUCK_WHITE, 0, 3.17, cabZ));
+  body.add(box(2.6, 0.08, 0.3, TRUCK_GREEN, 0, 3.08, cabZ + 1.05));
+  // Glass: windshield only. Both side windows are rolled down: Steve hangs out
+  // the driver's side and his tail flops out the passenger side.
   const glass = new THREE.MeshToonMaterial({ color: 0xbfeaff, gradientMap: gradient, transparent: true, opacity: 0.3, depthWrite: false });
   const ws = new THREE.Mesh(new THREE.PlaneGeometry(2.46, 0.92), glass);
   ws.position.set(0, 2.62, cabZ + 0.9);
   body.add(ws);
-  const sideGlass = new THREE.Mesh(new THREE.PlaneGeometry(1.68, 0.92), glass);
-  sideGlass.position.set(-1.3, 2.62, cabZ);
-  sideGlass.rotation.y = -Math.PI / 2;
-  body.add(sideGlass);
-  // Side mirrors
+  // Window sills
+  for (const sx of [1.33, -1.33]) body.add(box(0.14, 0.08, 1.7, 0xd5d9df, sx, 2.18, cabZ));
+  // Mirrors on the front fenders, so they don't block Steve's view (or ours)
   for (const sx of [1, -1]) {
-    body.add(box(0.35, 0.05, 0.05, DARK, sx * 1.5, 2.45, cabZ + 0.85));
-    body.add(box(0.1, 0.42, 0.26, DARK, sx * 1.7, 2.5, cabZ + 0.85));
-    body.add(box(0.02, 0.34, 0.2, 0, sx * 1.65, 2.5, cabZ + 0.86, toon(0xcfefff, { emissive: 0x8fbfd8, emissiveIntensity: 0.3 })));
+    body.add(cyl(0.03, 0.03, 0.5, DARK, sx * 1.25, 2.1, 3.55, 6));
+    body.add(box(0.26, 0.3, 0.08, DARK, sx * 1.25, 2.4, 3.55));
+    body.add(box(0.2, 0.24, 0.02, 0, sx * 1.25, 2.4, 3.5, toon(0xcfefff, { emissive: 0x8fbfd8, emissiveIntensity: 0.3 })));
   }
   // Seat behind Steve
-  body.add(box(1.0, 1.0, 0.25, 0x8e5b3d, 0.25, 2.3, cabZ - 0.75));
+  body.add(box(1.0, 1.0, 0.25, 0x8e5b3d, 0.6, 2.3, cabZ - 0.75));
 
   // Hood, grille, headlights
   body.add(box(2.5, 0.75, 0.7, TRUCK_WHITE, 0, 1.5, 3.55));
@@ -489,21 +486,31 @@ export function makeTruck() {
     }
   }
 
-  // Steve rides in the cab with his head out the sunroof
+  // Steve sits in the driver's seat (left, +x) and leans out the window:
+  // body inside, a stretched neck, head and one arm outside in the breeze.
   const steve = makeRaccoon();
-  steve.group.position.set(0.2, 2.35, cabZ - 0.05);
-  steve.group.scale.setScalar(1.3);
+  const lean = 0.4;
+  steve.group.position.set(0.65, 1.62, cabZ - 0.1);
+  steve.group.rotation.z = -lean;
+  steve.group.scale.setScalar(1.05);
+  steve.group.userData.baseY = 1.62;
+  steve.head.position.set(0.85, 1.35, 0.05);
+  steve.head.userData.baseTilt = lean * 0.7;
+  const neck = sphere(0.3, 0x8b9096, 0.42, 0.9, 0.02, 12);
+  steve.group.add(neck);
+  addOutline(neck);
   body.add(steve.group);
-  // Steve's tail dangles out the driver's window
-  steve.tail[0].parent.position.set(0.4, 0.15, -0.1);
-  steve.tail[0].parent.rotation.set(0.0, -1.7, -0.75, 'ZYX');
+  // Tail flops out the passenger window
+  steve.tail[0].parent.position.set(-0.4, 0.55, -0.2);
+  steve.tail[0].parent.rotation.set(0.0, 1.57, 0.3, 'ZYX');
+  steve.tail[0].parent.scale.setScalar(1.3);
 
   // Steering wheel with column
   const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.05, 6, 18), toon(DARK));
-  wheel.position.set(0.2, 2.55, cabZ + 0.5);
+  wheel.position.set(0.55, 2.5, cabZ + 0.5);
   wheel.rotation.x = -1.0;
   body.add(wheel);
-  const column = cyl(0.05, 0.05, 0.4, DARK, 0.2, 2.45, cabZ + 0.62, 6);
+  const column = cyl(0.05, 0.05, 0.4, DARK, 0.55, 2.4, cabZ + 0.62, 6);
   column.rotation.x = 0.6;
   body.add(column);
 

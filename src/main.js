@@ -1189,13 +1189,13 @@ function animateTruck(dt, time) {
   }
   head.rotation.x += (headX - head.rotation.x) * Math.min(1, dt * 12);
   head.rotation.y += (headY - head.rotation.y) * Math.min(1, dt * 8);
-  head.rotation.z = headZ;
-  const cele = state.celebrateT > 0 ? Math.abs(Math.sin(state.celebrateT * 12)) * 0.35 : 0;
-  steve.group.position.y = 2.35 + cele + (T.grounded ? 0 : 0.15);
-  steve.arms[0].rotation.z = 0.2 + T.steer * 0.6 + (cele ? 1.8 : 0);
-  steve.arms[1].rotation.z = -0.2 + T.steer * 0.6 - (cele ? 1.8 : 0);
-  steve.arms[0].rotation.x = cele ? -2.6 : -1.1;
-  steve.arms[1].rotation.x = cele ? -2.6 : -1.1;
+  head.rotation.z = (head.userData.baseTilt || 0) + headZ;
+  const cele = state.celebrateT > 0 ? Math.abs(Math.sin(state.celebrateT * 12)) * 0.25 : 0;
+  steve.group.position.y = steve.group.userData.baseY + cele + (T.grounded ? 0 : 0.1);
+  // Outer arm rests on the sill and waves when celebrating; inner arm steers
+  const wave = cele ? 1.2 + Math.sin(state.celebrateT * 20) * 0.5 : Math.sin(time * 1.3) * 0.08;
+  steve.arms[0].rotation.set(-0.2, 0, 0.75 + wave);
+  steve.arms[1].rotation.set(-1.1, 0, -0.2 + T.steer * 0.6);
   // Tail wags, faster at speed
   const sp = Math.abs(T.fwd);
   steve.tail.forEach((seg, i) => {
