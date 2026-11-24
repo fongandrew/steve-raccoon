@@ -1184,17 +1184,17 @@ function animateTruck(dt, time) {
     headZ = Math.sin(time * 25) * 0.12;
     headY = -T.steer * 0.8;
   } else {
-    headY = T.steer * 0.9 + Math.sin(time * 0.7) * 0.1;
+    headY = 0.15 + T.steer * 0.7 + Math.sin(time * 0.7) * 0.1;
     headX = -0.05 + (T.grounded ? 0 : -0.3);
   }
   head.rotation.x += (headX - head.rotation.x) * Math.min(1, dt * 12);
   head.rotation.y += (headY - head.rotation.y) * Math.min(1, dt * 8);
   head.rotation.z = (head.userData.baseTilt || 0) + headZ;
-  const cele = state.celebrateT > 0 ? Math.abs(Math.sin(state.celebrateT * 12)) * 0.25 : 0;
+  const cele = state.celebrateT > 0 ? Math.abs(Math.sin(state.celebrateT * 12)) * 0.06 : 0;
   steve.group.position.y = steve.group.userData.baseY + cele + (T.grounded ? 0 : 0.1);
-  // Outer arm rests on the sill and waves when celebrating; inner arm steers
-  const wave = cele ? 1.2 + Math.sin(state.celebrateT * 20) * 0.5 : Math.sin(time * 1.3) * 0.08;
-  steve.arms[0].rotation.set(-0.2, 0, 0.75 + wave);
+  // Outer arm rests on the window sill (and waves when celebrating); inner arm steers
+  const wave = cele ? 0.9 + Math.sin(state.celebrateT * 20) * 0.4 : 0;
+  steve.arms[0].rotation.set(0.15, 0, 1.55 + wave);
   steve.arms[1].rotation.set(-1.1, 0, -0.2 + T.steer * 0.6);
   // Tail wags, faster at speed
   const sp = Math.abs(T.fwd);
