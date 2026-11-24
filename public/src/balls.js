@@ -1,3 +1,4 @@
+// Beach balls: punted by the truck, bouncing off buildings and trees.
 import * as THREE from '../vendor/three.module.js';
 import { audio } from './audio.js';
 import { GRAVITY } from './constants.js';
@@ -10,6 +11,17 @@ import { surfaceHeight } from './world.js';
 const _ax = new THREE.Vector3();
 const _q = new THREE.Quaternion();
 
+/**
+ * @typedef {import('./models.js').BeachBallModel & {
+ *   home: [number, number],
+ *   pos: THREE.Vector3,
+ *   vel: THREE.Vector3,
+ *   hitT: number,
+ * }} Ball
+ * `home` is its spawn spot as [x, z]; `hitT` the shift time the truck last punted it.
+ */
+
+/** @type {Ball[]} */
 const balls = world.balls.map(([x, z]) => {
 	const b = makeBeachBall();
 	scene.add(b.group);
@@ -24,6 +36,7 @@ export function resetBalls() {
 	}
 }
 const BALL_R = 0.9;
+/** @param {number} dt */
 export function updateBalls(dt) {
 	const fx = Math.sin(T.heading);
 	const fz = Math.cos(T.heading);

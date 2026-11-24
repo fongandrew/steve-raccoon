@@ -1,3 +1,5 @@
+// Townsfolk and pets: they stroll about, dodge the truck, and get bounced when
+// they don't. (The array is still called `cats` for historical reasons.)
 import * as THREE from '../vendor/three.module.js';
 import { audio } from './audio.js';
 import { GRAVITY } from './constants.js';
@@ -8,8 +10,49 @@ import { addScore, state, T } from './state.js';
 import { wrapAngle } from './util.js';
 import { BLOCK, blockCenter, HALF, N, surfaceHeight } from './world.js';
 
+/** @typedef {import('./models.js').CritterModel} CritterModel */
+/** @typedef {import('./models.js').CritterSpecies} CritterSpecies */
+
+/**
+ * How a species behaves.
+ * @typedef {object} SpeciesDef
+ * @property {number} n how many roam the streets
+ * @property {number} speed walking speed
+ * @property {number} dodge chance of leaping clear of the truck
+ * @property {'oof' | 'yip' | 'squeak' | 'meow' | 'huff'} sound
+ * @property {boolean} [hop] moves by hopping
+ */
+
+/** @typedef {{ species: CritterSpecies, x: number, z: number }} CritterSpot */
+
+/**
+ * @typedef {CritterModel & {
+ *   spec: SpeciesDef,
+ *   spot: CritterSpot | null,
+ *   stars: THREE.Group,
+ *   x: number,
+ *   z: number,
+ *   y: number,
+ *   h: number,
+ *   state: 'walk' | 'sit' | 'flee' | 'jump' | 'fly' | 'dazed',
+ *   t: number,
+ *   vx: number,
+ *   vz: number,
+ *   vy: number,
+ *   spin: number,
+ *   ph?: number,
+ *   vh?: number,
+ *   blinkT?: number,
+ *   dodgeRoll?: boolean,
+ * }} Critter
+ * `spot` pins it to one place in the world (null = roams the pavements); `h` is the heading it
+ * wants and `vh` the one it is drawn at; `t` counts down to its next change of mind; `ph` is
+ * its walk-cycle phase; `dodgeRoll` whether it will leap clear this time.
+ */
+
 // Citizens: a mix of critters out for a stroll. Most will get out of Steve's
 // way, by running or leaping; the slow ones get bounced (gently, cartoonishly).
+/** @type {Record<string, SpeciesDef>} */
 const SPECIES = {
 	// townsfolk
 	bear: { n: 2, speed: 1.7, dodge: 0.5, sound: 'oof' },
@@ -26,7 +69,12 @@ const SPECIES = {
 	squirrel: { n: 2, speed: 3.2, dodge: 0.85, sound: 'squeak' },
 	dalmatian: { n: 0, speed: 2.6, dodge: 0.6, sound: 'yip' },
 };
+/** @type {Critter[]} */
 export const cats = []; // (all citizens, not just cats; the name stuck)
+/**
+ * @param {CritterSpecies} species
+ * @param {CritterSpot | null} spot
+ */
 function addCritter(species, spot) {
 	const c = makeCritter(species, Math.random);
 	scene.add(c.group);
@@ -45,7 +93,7 @@ function addCritter(species, spot) {
 	c.group.add(stars);
 	cats.push({
 		...c,
-		spec: SPECIES[species],
+		spec: /** @type {SpeciesDef} */ (SPECIES[species]),
 		spot,
 		stars,
 		x: 0,
@@ -61,9 +109,10 @@ function addCritter(species, spot) {
 	});
 }
 for (const [sp, def] of Object.entries(SPECIES))
-	for (let i = 0; i < def.n; i++) addCritter(sp, null);
+	for (let i = 0; i < def.n; i++) addCritter(/** @type {CritterSpecies} */ (sp), null);
 for (const spot of world.critterSpots) addCritter(spot.species, spot);
 
+/** @param {Critter} cat */
 export function placeCat(cat) {
 	if (cat.spot) {
 		Object.assign(cat, {
@@ -83,17 +132,22 @@ export function placeCat(cat) {
 	const e = BLOCK / 2 - 0.8;
 	const cx = blockCenter(bx);
 	const cz = blockCenter(bz);
+	/** @type {[number, number, number][]} */
 	const spots = [
 		[cx + off, cz + e, Math.PI / 2],
 		[cx + off, cz - e, -Math.PI / 2],
 		[cx + e, cz + off, 0],
 		[cx - e, cz + off, Math.PI],
 	];
-	const [x, z, h] = spots[side];
+	const [x, z, h] = /** @type {[number, number, number]} */ (spots[side]);
 	Object.assign(cat, { x, z, y: surfaceHeight(x, z), h, state: 'walk', t: Math.random() * 4 });
 	if (Math.hypot(x - T.pos.x, z - T.pos.z) < 30) cat.x += 60 * (x > 0 ? -1 : 1);
 }
 
+/**
+ * @param {number} x
+ * @param {number} z
+ */
 function catBlocked(x, z) {
 	for (const b of world.boxes)
 		if (!b.off && x > b.minX - 0.5 && x < b.maxX + 0.5 && z > b.minZ - 0.5 && z < b.maxZ + 0.5)
@@ -103,18 +157,25 @@ function catBlocked(x, z) {
 	return Math.abs(x) > HALF + 3 || Math.abs(z) > HALF + 3;
 }
 
-/** Two-legged townsfolk: stroll, panic-run with flailing arms, wave, get bounced. */
+/**
+ * Two-legged townsfolk: stroll, panic-run with flailing arms, wave, get bounced.
+ * @param {Critter} c
+ * @param {number} dt
+ * @param {number} time
+ */
 function animateFolk(c, dt, time) {
 	const moving = c.state === 'walk' || c.state === 'flee';
 	const fleeing = c.state === 'flee';
 	c.ph =
 		(c.ph || Math.random() * 6) +
 		dt * (moving ? (fleeing ? 16 : 7) * Math.max(0.8, c.spec.speed / 2) : 0);
+	/** @type {(v: number, target: number, rate?: number) => number} */
 	const k = (v, target, rate = 10) => v + (target - v) * Math.min(1, dt * rate);
 	const B = c.body;
 	const near = Math.hypot(c.x - T.pos.x, c.z - T.pos.z) < 16 && Math.hypot(T.vel.x, T.vel.z) < 6;
 	let legA = 0;
 	let armA = 0;
+	/** @type {[number, number]} */
 	let armLift = [0, 0];
 	let pitch = 0;
 	let roll = 0;
@@ -136,7 +197,7 @@ function animateFolk(c, dt, time) {
 		// standing about; looks around, and waves at Steve when he's nearby and polite
 		headYaw = Math.sin(time * 0.6 + c.z) * 0.6;
 		if (near) {
-			const a = Math.atan2(T.pos.x - c.x, T.pos.z - c.z) - c.vh;
+			const a = Math.atan2(T.pos.x - c.x, T.pos.z - c.z) - /** @type {number} */ (c.vh);
 			headYaw = Math.max(-1, Math.min(1, wrapAngle(a)));
 			armLift[0] = 2.5;
 		}
@@ -148,14 +209,19 @@ function animateFolk(c, dt, time) {
 		headYaw = Math.sin(time * 6) * 0.3;
 		roll = Math.sin(time * 6) * 0.15;
 	}
-	c.legs[0].rotation.x = k(c.legs[0].rotation.x, legA, 18);
-	c.legs[1].rotation.x = k(c.legs[1].rotation.x, -legA, 18);
+	const leg0 = /** @type {THREE.Group} */ (c.legs[0]);
+	const leg1 = /** @type {THREE.Group} */ (c.legs[1]);
+	leg0.rotation.x = k(leg0.rotation.x, legA, 18);
+	leg1.rotation.x = k(leg1.rotation.x, -legA, 18);
+	const arms = /** @type {THREE.Group[]} */ (c.arms);
 	for (let i = 0; i < 2; i++) {
+		const arm = /** @type {THREE.Group} */ (arms[i]);
+		const lift = /** @type {number} */ (armLift[i]);
 		const side = i === 0 ? 1 : -1;
 		const wave = c.state === 'sit' && near && i === 0 ? Math.sin(time * 12) * 0.35 : 0;
 		const swingDir = i === 0 ? armA : -armA;
-		c.arms[i].rotation.x = k(c.arms[i].rotation.x, armLift[i] ? -0.2 : swingDir, 14);
-		c.arms[i].rotation.z = k(c.arms[i].rotation.z, side * (0.12 + armLift[i]) + wave, 14);
+		arm.rotation.x = k(arm.rotation.x, lift ? -0.2 : swingDir, 14);
+		arm.rotation.z = k(arm.rotation.z, side * (0.12 + lift) + wave, 14);
 	}
 	if (c.state !== 'fly') B.rotation.x = k(B.rotation.x, pitch);
 	B.rotation.z = k(B.rotation.z, roll, 14);
@@ -170,7 +236,12 @@ function animateFolk(c, dt, time) {
 	for (const e of c.eyes) e.scale.y = closed ? 0.15 : 1;
 }
 
-/** Pose and animate a critter from its state. */
+/**
+ * Pose and animate a critter from its state.
+ * @param {Critter} c
+ * @param {number} dt
+ * @param {number} time
+ */
 function animateCritter(c, dt, time) {
 	c.vh = c.vh ?? c.h;
 	c.vh += wrapAngle(c.h - c.vh) * Math.min(1, dt * (c.state === 'flee' ? 12 : 6)); // turn smoothly
@@ -183,6 +254,7 @@ function animateCritter(c, dt, time) {
 	c.ph =
 		(c.ph || Math.random() * 6) +
 		dt * (moving ? (fleeing ? 22 : 11) * (c.spec.speed > 2.9 ? 1.2 : 1) : 0);
+	/** @type {(v: number, target: number, rate?: number) => number} */
 	const k = (v, target, rate = 10) => v + (target - v) * Math.min(1, dt * rate);
 	const B = c.body;
 	let bodyY = c.baseY;
@@ -239,7 +311,9 @@ function animateCritter(c, dt, time) {
 	B.rotation.z = k(B.rotation.z, roll, 14);
 	B.position.y = k(B.position.y, bodyY, 20);
 	B.scale.set(1 / Math.sqrt(squash), k(B.scale.y, squash, 18), 1 / Math.sqrt(squash));
-	c.legs.forEach((l, i) => (l.rotation.x = k(l.rotation.x, legSwing[i], 16)));
+	c.legs.forEach(
+		(l, i) => (l.rotation.x = k(l.rotation.x, /** @type {number} */ (legSwing[i]), 16)),
+	);
 	c.head.rotation.x = k(c.head.rotation.x, headPitch, 8);
 	c.head.rotation.y = k(c.head.rotation.y, headYaw, 4);
 	c.ears.forEach((e) => (e.rotation.x = k(e.rotation.x, earFlap, 10)));
@@ -258,6 +332,7 @@ function animateCritter(c, dt, time) {
 	for (const e of c.eyes) e.scale.y = closed ? 0.15 : 1;
 }
 
+/** @param {Critter} c */
 function critterSound(c) {
 	const snd = c.spec.sound;
 	if (snd === 'meow') audio.meow();
@@ -267,7 +342,11 @@ function critterSound(c) {
 	else audio.squeak();
 }
 
-/** Leap sideways out of the truck's path. */
+/**
+ * Leap sideways out of the truck's path.
+ * @param {Critter} c
+ * @param {number} [strength]
+ */
 export function scareCat(c, strength = 1) {
 	if (c.state === 'fly' || c.state === 'jump' || c.state === 'dazed') return;
 	const dx = c.x - T.pos.x;
@@ -286,9 +365,17 @@ export function scareCat(c, strength = 1) {
 	c.vy = 9;
 	c.h = Math.atan2(sx, sz);
 	if (Math.random() < 0.5)
-		popup(['nope!', 'eep!', '!!!', 'yikes!'][(Math.random() * 4) | 0], c.group.position, 'fun');
+		popup(
+			/** @type {string} */ (['nope!', 'eep!', '!!!', 'yikes!'][(Math.random() * 4) | 0]),
+			c.group.position,
+			'fun',
+		);
 }
 
+/**
+ * @param {number} dt
+ * @param {number} time
+ */
 export function updateCats(dt, time) {
 	const speed = Math.hypot(T.vel.x, T.vel.z);
 	const fx = Math.sin(T.heading);

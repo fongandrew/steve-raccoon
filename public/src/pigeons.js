@@ -1,3 +1,4 @@
+// Pigeons: flocks that peck about the plazas and scatter when the truck comes near.
 import * as THREE from '../vendor/three.module.js';
 import { audio } from './audio.js';
 import { popup } from './hud.js';
@@ -6,6 +7,19 @@ import { scene, world } from './scene.js';
 import { state, T } from './state.js';
 import { LAWN_Y } from './world.js';
 
+/**
+ * @typedef {import('./models.js').PigeonModel & {
+ *   spot: { x: number, z: number, r: number },
+ *   state: 'peck' | 'fly' | 'away',
+ *   t: number,
+ *   pos: THREE.Vector3,
+ *   vel: THREE.Vector3,
+ *   h: number,
+ * }} Pigeon
+ * `spot` is the flock's patch; `t` counts down to the next change; `h` is its heading.
+ */
+
+/** @type {Pigeon[]} */
 export const pigeons = [];
 for (const spot of world.pigeonSpots) {
 	for (let i = 0; i < 10; i++) {
@@ -24,8 +38,11 @@ for (const spot of world.pigeonSpots) {
 	}
 }
 let lastFlutter = -9;
+/** @param {Pigeon} pg */
 export function placePigeon(pg) {
+	/** @type {number} */
 	let x;
+	/** @type {number} */
 	let z;
 	do {
 		const a = Math.random() * Math.PI * 2;
@@ -38,8 +55,14 @@ export function placePigeon(pg) {
 	pg.state = 'peck';
 	pg.group.visible = true;
 }
+/**
+ * @param {number} dt
+ * @param {number} time
+ */
 export function updatePigeons(dt, time) {
 	for (const pg of pigeons) {
+		const wing0 = /** @type {THREE.Group} */ (pg.wings[0]);
+		const wing1 = /** @type {THREE.Group} */ (pg.wings[1]);
 		pg.t -= dt;
 		const d = Math.hypot(pg.pos.x - T.pos.x, pg.pos.z - T.pos.z);
 		if (pg.state === 'peck') {
@@ -50,8 +73,8 @@ export function updatePigeons(dt, time) {
 			pg.pos.x += Math.sin(pg.h) * 0.3 * dt;
 			pg.pos.z += Math.cos(pg.h) * 0.3 * dt;
 			pg.group.rotation.x = Math.max(0, Math.sin(time * 9 + pg.pos.x * 3)) * 0.5; // peck peck
-			pg.wings[0].rotation.z = -1.35; // wings folded along the body
-			pg.wings[1].rotation.z = 1.35;
+			wing0.rotation.z = -1.35; // wings folded along the body
+			wing1.rotation.z = 1.35;
 			if (d < 13) {
 				// Everybody panics
 				pg.state = 'fly';
@@ -76,8 +99,8 @@ export function updatePigeons(dt, time) {
 			pg.vel.y += 1.5 * dt;
 			pg.pos.addScaledVector(pg.vel, dt);
 			const flap = Math.sin(time * 30 + pg.pos.x) * 0.9;
-			pg.wings[0].rotation.z = flap;
-			pg.wings[1].rotation.z = -flap;
+			wing0.rotation.z = flap;
+			wing1.rotation.z = -flap;
 			if (pg.t <= 0) {
 				pg.state = 'away';
 				pg.group.visible = false;

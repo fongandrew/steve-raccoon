@@ -1,3 +1,4 @@
+// Geese (immovable: the truck bounces off them) and the cargo they make it spill.
 import * as THREE from '../vendor/three.module.js';
 import { audio } from './audio.js';
 import { GRAVITY } from './constants.js';
@@ -10,7 +11,36 @@ import { HALF, N, ROAD, ROAD_Y, roadCenter, surfaceHeight } from './world.js';
 
 const tmpV = new THREE.Vector3();
 
+/**
+ * @typedef {import('./models.js').GooseModel & {
+ *   x: number,
+ *   z: number,
+ *   h: number,
+ *   tx: number,
+ *   tz: number,
+ *   wait: number,
+ *   alert: number,
+ *   honkT: number,
+ *   hop: number,
+ *   cool: number,
+ *   replyT: number,
+ *   home?: [number, number],
+ * }} Goose
+ * `tx`/`tz` is where it is wandering to; `home` (set by `placeGoose`) the spot it wanders round.
+ */
+
+/**
+ * A bag that has fallen out of the hopper.
+ * @typedef {object} SpilledBag
+ * @property {THREE.Group} mesh
+ * @property {THREE.Vector3} pos
+ * @property {THREE.Vector3} vel
+ * @property {number} t seconds since it spilled
+ */
+
+/** @type {Goose[]} */
 export const geese = [];
+/** @type {(x: number, z: number) => boolean} */
 const onRoad = (x, z) =>
 	surfaceHeight(x, z) === ROAD_Y && Math.abs(x) < HALF + 3 && Math.abs(z) < HALF + 3;
 for (let i = 0; i < 6; i++) {
@@ -32,6 +62,7 @@ for (let i = 0; i < 6; i++) {
 		replyT: 0,
 	});
 }
+/** @param {Goose} g */
 export function placeGoose(g) {
 	do {
 		const i = (Math.random() * (N + 1)) | 0;
@@ -46,7 +77,9 @@ export function placeGoose(g) {
 	g.alert = 0;
 }
 // Spilled cargo: bags that fly out of the hopper and then fade away
+/** @type {SpilledBag[]} */
 export const spilled = [];
+/** @param {number} n how many bags to lose */
 function spill(n) {
 	n = Math.min(n, state.load);
 	state.load -= n;
@@ -64,10 +97,15 @@ function spill(n) {
 	}
 	if (n) popup(`-${n} SPILLED!`, truck.group.position, 'bad', 3);
 }
+/**
+ * @param {number} dt
+ * @param {number} time
+ */
 export function updateGeese(dt, time) {
 	const fx = Math.sin(T.heading);
 	const fz = Math.cos(T.heading);
 	for (const g of geese) {
+		const home = /** @type {[number, number]} */ (g.home);
 		const dx = T.pos.x - g.x;
 		const dz = T.pos.z - g.z;
 		const dist = Math.hypot(dx, dz);
@@ -99,8 +137,8 @@ export function updateGeese(dt, time) {
 				for (let k = 0; k < 10; k++) {
 					const a = Math.random() * Math.PI * 2;
 					const r = 2 + Math.random() * 10;
-					const x = g.home[0] + Math.cos(a) * r;
-					const z = g.home[1] + Math.sin(a) * r;
+					const x = home[0] + Math.cos(a) * r;
+					const z = home[1] + Math.sin(a) * r;
 					if (onRoad(x, z)) {
 						g.tx = x;
 						g.tz = z;
@@ -155,13 +193,13 @@ export function updateGeese(dt, time) {
 			g.z,
 		);
 		g.group.rotation.y = g.h;
-		g.body.rotation.z = walking ? Math.sin(time * 9 + g.home[0]) * 0.12 : 0;
+		g.body.rotation.z = walking ? Math.sin(time * 9 + home[0]) * 0.12 : 0;
 		g.neck.rotation.x =
-			g.hop > 0 || standoff ? -0.35 : 0.1 + Math.sin(time * 2 + g.home[1]) * 0.06;
+			g.hop > 0 || standoff ? -0.35 : 0.1 + Math.sin(time * 2 + home[1]) * 0.06;
 	}
 	// Spilled bags tumble out and fade
 	for (let i = spilled.length - 1; i >= 0; i--) {
-		const b = spilled[i];
+		const b = /** @type {SpilledBag} */ (spilled[i]);
 		b.t += dt;
 		b.vel.y -= GRAVITY * dt;
 		b.pos.addScaledVector(b.vel, dt);
@@ -180,6 +218,10 @@ export function updateGeese(dt, time) {
 		}
 	}
 }
+/**
+ * @param {Goose} g
+ * @param {boolean} [force] honk out loud even if another goose just did
+ */
 function gooseHonk(g, force = false) {
 	g.hop = Math.max(g.hop, 0.25);
 	popup('HONK!', g.group.position, 'bad', 2.6);

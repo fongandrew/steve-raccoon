@@ -1,3 +1,4 @@
+// Treasures: floating gems hidden round town for Steve's hoard.
 import { audio } from './audio.js';
 import { popup, toast } from './hud.js';
 import { makeTreasure } from './models.js';
@@ -19,28 +20,42 @@ const TREASURE_NAMES = [
 	'the TV remote everyone was looking for',
 ];
 const TREASURE_COLORS = [0xff6bd5, 0x6ec6ff, 0xffd23f, 0x7cf3a0, 0xc77dff, 0xff8c42];
+/** @typedef {import('./world.js').Block} Block */
+
+/**
+ * @typedef {import('./models.js').TreasureModel & {
+ *   x: number,
+ *   y: number,
+ *   z: number,
+ *   name: string,
+ *   found: boolean,
+ * }} Treasure
+ */
+
+/** @type {Treasure[]} */
 export const treasures = [];
 {
+	/** @type {[number, number, number][]} as [x, z, y] */
 	const spots = [];
 	// Floating past the end of each park ramp: you have to jump for these
 	for (const r of world.ramps) {
 		spots.push([r.x + r.dirX * (r.len + 7), r.z + r.dirZ * (r.len + 7), LAWN_Y + 5.0]);
 	}
-	const dumpBlock = world.blocks.find((b) => b.type === 'dump');
+	const dumpBlock = /** @type {Block} */ (world.blocks.find((b) => b.type === 'dump'));
 	spots.push([dumpBlock.cx + 15, dumpBlock.cz - 15, LAWN_Y + 1.6]);
-	const plaza = world.blocks.find((b) => b.type === 'plaza');
+	const plaza = /** @type {Block} */ (world.blocks.find((b) => b.type === 'plaza'));
 	spots.push([plaza.cx - 12, plaza.cz, LAWN_Y + 1.6]);
 	// Tucked into a few backyards
 	const yards = world.blocks.filter((b) => b.type === 'houses');
 	for (const k of [3, 9, 15]) {
-		const b = yards[k % yards.length];
+		const b = /** @type {Block} */ (yards[k % yards.length]);
 		spots.push([b.cx + 5.5, b.cz + 5.5, LAWN_Y + 1.6]);
 	}
 	// Far corners of town
 	spots.push([roadCenter(0), roadCenter(0), ROAD_Y + 1.6]);
 	spots.push([roadCenter(N), roadCenter(N), ROAD_Y + 1.6]);
 	spots.forEach(([x, z, y], i) => {
-		const t = makeTreasure(TREASURE_COLORS[i % TREASURE_COLORS.length]);
+		const t = makeTreasure(/** @type {number} */ (TREASURE_COLORS[i % TREASURE_COLORS.length]));
 		t.group.position.set(x, y, z);
 		t.beam.position.y = 20 - (y - 1.6);
 		scene.add(t.group);
@@ -49,7 +64,7 @@ export const treasures = [];
 			x,
 			y,
 			z,
-			name: TREASURE_NAMES[i % TREASURE_NAMES.length],
+			name: /** @type {string} */ (TREASURE_NAMES[i % TREASURE_NAMES.length]),
 			found: false,
 		});
 	});
@@ -62,6 +77,7 @@ export function resetTreasures() {
 	}
 }
 
+/** @param {number} dt */
 export function updateTreasures(dt) {
 	for (const t of treasures) {
 		if (t.found) continue;

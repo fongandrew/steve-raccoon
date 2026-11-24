@@ -1,3 +1,4 @@
+// Knock-over-able props, trees and bushes: what happens when the truck hits them.
 import * as THREE from '../vendor/three.module.js';
 import { audio } from './audio.js';
 import { GRAVITY, TRASH_COLORS } from './constants.js';
@@ -6,6 +7,30 @@ import { burst, leafBurst, spawnParticle } from './particles.js';
 import { truck, world } from './scene.js';
 import { addScore, state, T } from './state.js';
 
+/** @typedef {import('./world.js').Prop} Prop */
+/** @typedef {import('./world.js').BatchProp} BatchProp */
+/** @typedef {import('./world.js').PropKind} PropKind */
+/** @typedef {import('./world.js').TreeCircle} TreeCircle */
+
+/**
+ * How one kind of prop reacts to being hit.
+ * @typedef {object} PropBehaviour
+ * @property {'fly' | 'tip' | 'shatter'} style
+ * @property {number} pts score for knocking it over (negative for the ones Steve shouldn't)
+ * @property {number} slow how much of the truck's speed survives the hit
+ * @property {string} text popup text
+ * @property {'boing' | 'bonk' | 'clang' | 'crunch' | 'squeak'} sound
+ * @property {boolean} [bad] counts as a bonk
+ * @property {boolean} [light] flies further
+ * @property {boolean} [heavy] flies less far
+ * @property {boolean} [quiet] no popup of its own
+ * @property {number[]} [debris] colours of the bits that fly off
+ */
+
+/**
+ * Put a prop back where it started.
+ * @param {Prop} p
+ */
 export function resetProp(p) {
 	p.knocked = false;
 	p.state = 'idle';
@@ -22,6 +47,10 @@ export function resetProp(p) {
 
 const _pm = new THREE.Matrix4();
 const _ps = new THREE.Vector3();
+/**
+ * Copy a prop's position and rotation to whatever draws it.
+ * @param {Prop} p
+ */
 function syncProp(p) {
 	if (p.mesh) {
 		p.mesh.visible = !p.hidden;
@@ -29,7 +58,8 @@ function syncProp(p) {
 		p.mesh.quaternion.copy(p.quat);
 	} else {
 		_ps.setScalar(p.hidden ? 0 : p.scale || 1);
-		p.batch.set(p.index, _pm.compose(p.pos, p.quat, _ps));
+		const bp = /** @type {BatchProp} */ (p);
+		bp.batch.set(bp.index, _pm.compose(p.pos, p.quat, _ps));
 	}
 }
 
@@ -37,6 +67,7 @@ function syncProp(p) {
 //   style: fly (launched, tumbles, lands on its side), tip (falls over from
 //   its base), shatter (bursts into debris)
 //   slow: how much of the truck's speed survives the hit
+/** @type {Partial<Record<PropKind, PropBehaviour>> & { cone: PropBehaviour }} */
 const KINDS = {
 	cone: { style: 'fly', pts: 2, slow: 0.98, text: 'boop!', sound: 'boing' },
 	mailbox: { style: 'fly', pts: -10, slow: 0.95, text: 'MAILBOX!', sound: 'bonk', bad: true },
@@ -84,6 +115,7 @@ const _q = new THREE.Quaternion();
 const _ax = new THREE.Vector3();
 const _e = new THREE.Euler();
 
+/** @param {number} dt */
 export function updateProps(dt) {
 	const speed = Math.hypot(T.vel.x, T.vel.z);
 	const fx = Math.sin(T.heading);
@@ -142,7 +174,7 @@ export function updateProps(dt) {
 						const tipEnd = p.home
 							.clone()
 							.addScaledVector(
-								_ax.copy(p.tipDir),
+								_ax.copy(/** @type {THREE.Vector3} */ (p.tipDir)),
 								p.kind === 'lamp' ? 5 : p.kind === 'tree' ? 4 : 3,
 							);
 						if (p.kind === 'tree') {
@@ -167,7 +199,9 @@ export function updateProps(dt) {
 					p.state = 'rest';
 				}
 			}
-			p.quat.copy(p.homeQuat).premultiply(_q.setFromAxisAngle(p.tipAxis, p.tipA));
+			p.quat
+				.copy(p.homeQuat)
+				.premultiply(_q.setFromAxisAngle(/** @type {THREE.Vector3} */ (p.tipAxis), p.tipA));
 			syncProp(p);
 		}
 		if (p.geyser > 0) {
@@ -202,6 +236,13 @@ export function updateProps(dt) {
 	}
 }
 
+/**
+ * Knock a prop over.
+ * @param {Prop} p
+ * @param {number} nx direction from the truck to the prop
+ * @param {number} nz
+ * @param {number} speed the truck's speed
+ */
 export function knockProp(p, nx, nz, speed) {
 	const K = KINDS[p.kind] || KINDS.cone;
 	p.knocked = true;
@@ -232,6 +273,7 @@ export function knockProp(p, nx, nz, speed) {
 		p.hidden = true;
 		syncProp(p);
 		const at = p.home.clone().add(new THREE.Vector3(0, 0.5, 0));
+		const debris = /** @type {number[]} */ (K.debris);
 		for (let i = 0; i < 9; i++) {
 			spawnParticle({
 				pos: at
@@ -248,7 +290,7 @@ export function knockProp(p, nx, nz, speed) {
 					3 + Math.random() * 5,
 					dz * power * 0.5 + (Math.random() - 0.5) * 5,
 				),
-				color: K.debris[i % K.debris.length],
+				color: /** @type {number} */ (debris[i % debris.length]),
 				size: 0.22 + Math.random() * 0.2,
 				life: 1.6,
 				grav: 22,
@@ -330,6 +372,12 @@ export function knockProp(p, nx, nz, speed) {
 	}
 }
 
+/**
+ * Fell the tree whose trunk is `circle`.
+ * @param {TreeCircle} circle
+ * @param {number} nx direction from the truck to the tree
+ * @param {number} nz
+ */
 export function fellTree(circle, nx, nz) {
 	circle.off = true;
 	const p = circle.prop;
