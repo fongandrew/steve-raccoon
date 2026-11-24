@@ -404,3 +404,15 @@ p.small {
   font-weight: 800;
   color: #e17055;
 }
+
+@media (min-width: 901px) {
+  #title {
+    justify-content: flex-start;
+    padding-left: 6vw;
+    background: linear-gradient(90deg, rgba(43, 45, 51, 0.35), rgba(43, 45, 51, 0) 65%);
+    backdrop-filter: none;
+  }
+  #title .card {
+    max-width: 500px;
+  }
+}
