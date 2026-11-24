@@ -1159,3 +1159,91 @@ export function makeTreasure(color) {
   g.add(beam);
   return { group: g, spin, beam };
 }
+
+// ---------------------------------------------------------------------------
+// Playful yard props (all built with their origin on the ground)
+// ---------------------------------------------------------------------------
+
+export function makeFlamingo() {
+  const g = new THREE.Group();
+  const PINK = 0xff7eb6;
+  for (const s of [-0.08, 0.08]) g.add(cyl(0.025, 0.025, 0.9, 0x2b2d33, s, 0.45, 0, 4));
+  const body = sphere(0.28, PINK, 0, 1.05, 0, 10);
+  body.scale.set(0.8, 0.75, 1.3);
+  g.add(body);
+  const neck = cyl(0.05, 0.06, 0.6, PINK, 0, 1.45, 0.28, 6);
+  neck.rotation.x = 0.35;
+  g.add(neck);
+  g.add(sphere(0.12, PINK, 0, 1.78, 0.38, 8));
+  const beak = cone(0.05, 0.18, 0x2b2d33, 0, 1.74, 0.52, 6);
+  beak.rotation.x = Math.PI / 2 + 0.4;
+  g.add(beak);
+  return g;
+}
+
+export function makeGnome() {
+  const g = new THREE.Group();
+  g.add(cyl(0.22, 0.28, 0.45, 0x3d7ea6, 0, 0.23, 0, 10)); // coat
+  g.add(cyl(0.29, 0.29, 0.06, 0x2b2d33, 0, 0.05, 0, 10)); // boots
+  g.add(sphere(0.17, 0xf1c9a5, 0, 0.6, 0.02, 10)); // face
+  g.add(sphere(0.06, 0xff9e9e, 0, 0.6, 0.18, 6)); // nose
+  const beard = cone(0.17, 0.32, 0xffffff, 0, 0.44, 0.08, 10);
+  beard.rotation.x = Math.PI;
+  g.add(beard);
+  g.add(cone(0.2, 0.5, 0xd9534f, 0, 0.92, 0, 10)); // hat
+  return g;
+}
+
+/** One 2.4-wide section of white picket fence, running along x. */
+export function makePicketFence() {
+  const g = new THREE.Group();
+  for (let i = 0; i < 6; i++) {
+    const x = -1.0 + i * 0.4;
+    g.add(box(0.16, 0.85, 0.06, 0xfdfdf8, x, 0.42, 0));
+    const tip = cone(0.12, 0.18, 0xfdfdf8, x, 0.93, 0, 4);
+    tip.rotation.y = Math.PI / 4;
+    g.add(tip);
+  }
+  for (const y of [0.25, 0.65]) g.add(box(2.4, 0.08, 0.05, 0xfdfdf8, 0, y, -0.05));
+  return g;
+}
+
+export function makeBeachBall() {
+  const c = document.createElement('canvas');
+  c.width = 256;
+  c.height = 16;
+  const ctx = c.getContext('2d');
+  const cols = ['#ff6b6b', '#fffbe8', '#ffd23f', '#fffbe8', '#6ec6ff', '#fffbe8'];
+  cols.forEach((col, i) => {
+    ctx.fillStyle = col;
+    ctx.fillRect((i * 256) / cols.length, 0, 256 / cols.length + 1, 16);
+  });
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const m = new THREE.Mesh(new THREE.SphereGeometry(0.9, 24, 16), new THREE.MeshToonMaterial({ map: tex, gradientMap: gradient }));
+  m.castShadow = true;
+  const g = new THREE.Group();
+  g.add(m);
+  return { group: g, ball: m };
+}
+
+export function makePigeon() {
+  const g = new THREE.Group();
+  const body = sphere(0.22, 0x8a8f9c, 0, 0.25, 0, 8);
+  body.scale.set(0.8, 0.8, 1.2);
+  g.add(body);
+  g.add(sphere(0.12, 0x6b7080, 0, 0.45, 0.2, 8));
+  g.add(sphere(0.09, 0x7fb59a, 0, 0.36, 0.17, 6)); // shiny neck
+  const beak = cone(0.03, 0.1, 0x2b2d33, 0, 0.44, 0.33, 4);
+  beak.rotation.x = Math.PI / 2;
+  g.add(beak);
+  const wings = [];
+  for (const s of [1, -1]) {
+    const w = new THREE.Group();
+    w.position.set(0.15 * s, 0.32, 0);
+    w.add(box(0.45, 0.04, 0.3, 0x6b7080, 0.22 * s, 0, 0));
+    g.add(w);
+    wings.push(w);
+  }
+  return { group: g, wings };
+}

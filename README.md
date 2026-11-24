@@ -32,7 +32,13 @@ You have one shift, from 6 AM to 6 PM, which takes three real minutes. Score as 
   random: coffee grounds give you the zoomies, flat soda gives you hiccups, and sometimes it's a sock.
   If his tummy hits zero, Steve gets **HANGRY** and the truck gets slow and wobbly.
 - **Golden Hour:** in the last 30 seconds of the shift, every point counts double.
-- **Be nice:** mailboxes, fire hydrants and cats cost you points. Honk (**H**) to make cats jump out of the way.
+- **Smash stuff:** the town is very knock-over-able. Light poles and signs tip over (and barely
+  slow you down), picket fences splinter, lawn flamingos and garden gnomes go flying, and benches,
+  picnic tables, trash bags and tires all tumble. Wreck things in quick succession for a
+  **CHAOS** combo. Beach balls in the parks and plaza can be punted around, the plaza pigeons
+  scatter when you roll up, and trees and bushes burst into leaves when you bump them.
+- **Be nice (a little):** mailboxes, fire hydrants and cats still cost you points. Honk (**H**)
+  to make cats jump out of the way.
 
 | Key | Action |
 | --- | --- |

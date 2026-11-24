@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import {
   buildWorld, groundHeight, isOnLawn, surfaceHeight, HALF, N, BLOCK, PITCH, ROAD, ROAD_Y, LAWN_Y, roadCenter, blockCenter, rng,
 } from './world.js';
-import { makeTruck, makeCat, makeCloud, makeTreasure, nightMats, toon, glow } from './models.js';
+import { makeTruck, makeCat, makeCloud, makeTreasure, makeBeachBall, makePigeon, nightMats, toon, glow } from './models.js';
 import { Audio } from './audio.js';
 
 // ---------------------------------------------------------------------------
@@ -567,7 +567,8 @@ function resetGame() {
   Object.assign(state, {
     time: 0, score: 0, load: 0, hunger: 100, hangry: false, zoomT: 0, hicT: 0, chompT: 0, snackCd: 0, honkCd: 0,
     grabs: [], driftCharge: 0, boostT: 0, goldenHour: false, spawnT: 0, streak: 0, lastCollect: -99, dumping: null, quipT: 18, shake: 0, celebrateT: 0, warned: false,
-    stats: { cans: 0, golden: 0, bags: 0, snacks: 0, bonks: 0, cats: 0, air: 0, loads: 0, doubles: 0, treasures: 0, boosts: 0 },
+    stats: { cans: 0, golden: 0, bags: 0, snacks: 0, bonks: 0, cats: 0, air: 0, loads: 0, doubles: 0, treasures: 0, boosts: 0, smashed: 0 },
+    chaos: 0, lastSmash: -9,
   });
   for (const h of world.houses) {
     for (const c of [h.can, h.goldCan]) {
@@ -582,14 +583,32 @@ function resetGame() {
   for (const p of world.props) resetProp(p);
   for (const c of cats) placeCat(c);
   resetTreasures();
+  resetBalls();
+  for (const pg of pigeons) placePigeon(pg);
   for (let i = 0; i < ACTIVE_CANS; i++) spawnCan(true);
 }
 
 function resetProp(p) {
   p.knocked = false;
-  p.mesh.position.copy(p.home);
-  p.mesh.rotation.set(0, p.homeRot, 0);
+  p.state = 'idle';
+  p.pos.copy(p.home);
+  p.quat.copy(p.homeQuat);
   p.geyser = 0;
+  p.hidden = false;
+  syncProp(p);
+}
+
+const _pm = new THREE.Matrix4();
+const _ps = new THREE.Vector3();
+function syncProp(p) {
+  if (p.mesh) {
+    p.mesh.visible = !p.hidden;
+    p.mesh.position.copy(p.pos);
+    p.mesh.quaternion.copy(p.quat);
+  } else {
+    _ps.setScalar(p.hidden ? 0 : 1);
+    p.batch.set(p.index, _pm.compose(p.pos, p.quat, _ps));
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -982,7 +1001,12 @@ function updateTruck(dt) {
       const d = Math.hypot(dx, dz);
       const rr = r + s.r;
       if (d >= rr || d < 1e-4) continue;
-      maxImpact = Math.max(maxImpact, resolve(c, dx / d, dz / d, rr - d));
+      const hit = resolve(c, dx / d, dz / d, rr - d);
+      maxImpact = Math.max(maxImpact, hit);
+      if (s.tree && hit > 3 && state.time - (s.shook || -9) > 0.8) {
+        s.shook = state.time;
+        leafBurst(s.x, s.z, 3.5, 14 + hit);
+      }
     }
   }
   if (maxImpact > 7) bonk(maxImpact);
@@ -1006,6 +1030,18 @@ function releaseBoost() {
   // instant kick forward
   T.vel.x += Math.sin(T.heading) * 4 * level;
   T.vel.z += Math.cos(T.heading) * 4 * level;
+}
+
+const LEAF_COLORS = [0x5cc96b, 0x48b85a, 0x7bd67a, 0x3fa65a];
+function leafBurst(x, z, y, n) {
+  for (let i = 0; i < n; i++) {
+    spawnParticle({
+      pos: new THREE.Vector3(x + (Math.random() - 0.5) * 2, y + Math.random() * 1.5, z + (Math.random() - 0.5) * 2),
+      vel: new THREE.Vector3((Math.random() - 0.5) * 5, 1 + Math.random() * 3, (Math.random() - 0.5) * 5),
+      color: LEAF_COLORS[i % LEAF_COLORS.length], size: 0.22, life: 1.8, grav: 2.5, drag: 1.2,
+    });
+  }
+  audio.rustle();
 }
 
 function resolve(c, nx, nz, pen) {
@@ -1037,18 +1073,41 @@ function bonk(strength) {
 // ---------------------------------------------------------------------------
 // Props (cones, mailboxes, hydrants)
 // ---------------------------------------------------------------------------
+// How each kind of prop reacts to being hit.
+//   style: fly (launched, tumbles, lands on its side), tip (falls over from
+//   its base), shatter (bursts into debris)
+//   slow: how much of the truck's speed survives the hit
+const KINDS = {
+  cone: { style: 'fly', pts: 2, slow: 0.98, text: 'boop!', sound: 'boing' },
+  mailbox: { style: 'fly', pts: -10, slow: 0.95, text: 'MAILBOX!', sound: 'bonk', bad: true },
+  hydrant: { style: 'fly', pts: -15, slow: 0.85, text: 'HYDRANT!', sound: 'bonk', bad: true },
+  lamp: { style: 'tip', pts: 0, slow: 0.88, text: 'clang!', sound: 'clang' },
+  sign: { style: 'tip', pts: 2, slow: 0.88, text: 'timber!', sound: 'crunch' },
+  fence: { style: 'shatter', pts: 1, slow: 0.97, text: 'crunch!', sound: 'crunch', debris: [0xfdfdf8, 0xe8e4d8] },
+  flamingo: { style: 'fly', pts: 3, slow: 0.99, text: 'flamingo!', sound: 'squeak', light: true },
+  gnome: { style: 'fly', pts: 3, slow: 0.99, text: 'yeet!', sound: 'boing', light: true },
+  bench: { style: 'fly', pts: 1, slow: 0.9, text: 'bench!', sound: 'crunch', heavy: true },
+  table: { style: 'fly', pts: 1, slow: 0.9, text: 'picnic over!', sound: 'crunch', heavy: true },
+  bag: { style: 'fly', pts: 1, slow: 0.97, text: 'splat!', sound: 'bonk', light: true, debris: TRASH_COLORS },
+  tire: { style: 'fly', pts: 1, slow: 0.97, text: 'boing!', sound: 'boing', light: true },
+};
+
+const _q = new THREE.Quaternion();
+const _ax = new THREE.Vector3();
+const _e = new THREE.Euler();
+
 function updateProps(dt) {
   const speed = Math.hypot(T.vel.x, T.vel.z);
   const fx = Math.sin(T.heading);
   const fz = Math.cos(T.heading);
   for (const p of world.props) {
     if (!p.knocked) {
-      if (T.y > 2) continue;
+      if (T.y > p.home.y + 2) continue;
+      // cheap reject before the per-circle test
+      if (Math.abs(p.x - T.pos.x) > 6 || Math.abs(p.z - T.pos.z) > 6) continue;
       for (const off of [1.9, -1.9]) {
-        const cx = T.pos.x + fx * off;
-        const cz = T.pos.z + fz * off;
-        const dx = p.home.x - cx;
-        const dz = p.home.z - cz;
+        const dx = p.home.x - (T.pos.x + fx * off);
+        const dz = p.home.z - (T.pos.z + fz * off);
         const d = Math.hypot(dx, dz);
         if (d < 1.7 + p.r) {
           knockProp(p, dx / (d || 1), dz / (d || 1), speed);
@@ -1057,26 +1116,50 @@ function updateProps(dt) {
       }
       continue;
     }
-    // flying / resting
     p.timer += dt;
-    const floor = p.home.y;
-    if (p.mesh.position.y > floor || p.vel.y > 0) {
+    if (p.state === 'fly') {
+      const floor = p.home.y;
       p.vel.y -= GRAVITY * dt;
-      p.mesh.position.addScaledVector(p.vel, dt);
-      p.mesh.rotation.x += p.spin.x * dt;
-      p.mesh.rotation.z += p.spin.z * dt;
-      if (p.mesh.position.y <= floor) {
-        p.mesh.position.y = floor;
+      p.pos.addScaledVector(p.vel, dt);
+      _q.setFromEuler(_e.set(p.spin.x * dt, p.spin.y * dt, p.spin.z * dt));
+      p.quat.premultiply(_q);
+      if (p.pos.y <= floor) {
+        p.pos.y = floor;
         if (Math.abs(p.vel.y) > 4) {
           p.vel.y = -p.vel.y * 0.35;
           p.vel.x *= 0.6;
           p.vel.z *= 0.6;
+          p.spin.multiplyScalar(0.6);
         } else {
-          p.vel.set(0, 0, 0);
-          p.mesh.rotation.x = Math.PI / 2;
-          p.mesh.rotation.z = 0;
+          // come to rest lying on its side
+          p.state = 'rest';
+          _ax.set(Math.cos(p.restA), 0, Math.sin(p.restA));
+          p.quat.copy(p.homeQuat).premultiply(_q.setFromAxisAngle(_ax, Math.PI / 2));
+          p.pos.y = floor + (p.restLift || 0);
         }
       }
+      syncProp(p);
+    } else if (p.state === 'tip') {
+      // falls over from its base like a felled tree, with a little bounce
+      p.tipW += (9 * Math.sin(Math.max(0.05, p.tipA)) + 1) * dt;
+      p.tipA += p.tipW * dt;
+      if (p.tipA >= Math.PI / 2 - 0.02) {
+        p.tipA = Math.PI / 2 - 0.02;
+        if (p.tipW > 1.5) {
+          p.tipW = -p.tipW * 0.25;
+          if (!p.landed) {
+            p.landed = true;
+            audio.bonk(0.25);
+            const tipEnd = p.home.clone().addScaledVector(_ax.copy(p.tipDir), p.kind === 'lamp' ? 5 : 3);
+            burst(tipEnd, 6, { color: 0xd9d4c7, size: 0.4, life: 0.6, grav: 4, speed: 4, up: 2, sphere: true, grow: 1.5, alpha: 0.6 });
+          }
+        } else {
+          p.tipW = 0;
+          p.state = 'rest';
+        }
+      }
+      p.quat.copy(p.homeQuat).premultiply(_q.setFromAxisAngle(p.tipAxis, p.tipA));
+      syncProp(p);
     }
     if (p.geyser > 0) {
       p.geyser -= dt;
@@ -1094,38 +1177,83 @@ function updateProps(dt) {
         audio.splash();
       }
     }
-    if (p.timer > 25 && Math.hypot(T.pos.x - p.home.x, T.pos.z - p.home.z) > 40) resetProp(p);
+    if (p.timer > 30 && Math.hypot(T.pos.x - p.home.x, T.pos.z - p.home.z) > 45) resetProp(p);
   }
 }
 
 function knockProp(p, nx, nz, speed) {
+  const K = KINDS[p.kind] || KINDS.cone;
   p.knocked = true;
   p.timer = 0;
-  const power = Math.max(4, speed);
-  p.vel.set(T.vel.x * 0.9 + nx * power * 0.4, 4 + power * 0.35, T.vel.z * 0.9 + nz * power * 0.4);
-  p.spin.set((Math.random() - 0.5) * 20, 0, (Math.random() - 0.5) * 20);
-  p.mesh.position.y = p.home.y + 0.05;
+  p.landed = false;
+  const power = Math.max(4, speed) * (K.heavy ? 0.55 : K.light ? 1.2 : 1);
+  // Direction of travel of the hit: mostly the truck's motion
+  let dx = T.vel.x * 0.8 + nx * 3;
+  let dz = T.vel.z * 0.8 + nz * 3;
+  const dl = Math.hypot(dx, dz) || 1;
+  dx /= dl;
+  dz /= dl;
+  if (K.style === 'tip') {
+    p.state = 'tip';
+    p.tipDir = new THREE.Vector3(dx, 0, dz);
+    p.tipAxis = new THREE.Vector3(dz, 0, -dx);
+    p.tipA = 0.02;
+    p.tipW = 0.6 + speed * 0.12;
+  } else if (K.style === 'shatter') {
+    p.state = 'gone';
+    p.hidden = true;
+    syncProp(p);
+    const at = p.home.clone().add(new THREE.Vector3(0, 0.5, 0));
+    for (let i = 0; i < 9; i++) {
+      spawnParticle({
+        pos: at.clone().add(new THREE.Vector3((Math.random() - 0.5) * 2, Math.random() * 0.6, (Math.random() - 0.5) * 2)),
+        vel: new THREE.Vector3(dx * power * 0.5 + (Math.random() - 0.5) * 5, 3 + Math.random() * 5, dz * power * 0.5 + (Math.random() - 0.5) * 5),
+        color: K.debris[i % K.debris.length], size: 0.22 + Math.random() * 0.2, life: 1.6, grav: 22,
+      });
+    }
+  } else {
+    p.state = 'fly';
+    p.vel.set(dx * power * 0.95, 4 + power * 0.35, dz * power * 0.95);
+    p.spin.set((Math.random() - 0.5) * 18, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 18);
+    p.restA = Math.random() * Math.PI * 2;
+    p.restLift = p.kind === 'tire' ? 0 : 0.15;
+    p.pos.y = p.home.y + 0.05;
+    if (K.debris) burst(p.home.clone().add(new THREE.Vector3(0, 0.6, 0)), 8, { colors: K.debris, size: 0.25, life: 1, grav: 18, speed: 6, up: 6 });
+  }
+  // Knocking things over costs a little momentum
+  T.vel.multiplyScalar(K.slow);
   if (state.mode !== 'playing') return;
-  const pos = p.mesh.position.clone();
-  if (p.kind === 'cone') {
-    addScore(2);
-    audio.boing();
-    popup('boop! +2', pos, 'fun');
-  } else if (p.kind === 'mailbox') {
-    addScore(-10);
-    state.stats.bonks++;
-    audio.bonk(0.7);
-    popup('MAILBOX! -10', pos, 'bad');
-    burst(pos.add(new THREE.Vector3(0, 1, 0)), 10, { color: 0xffffff, size: 0.35, life: 2, grav: 2, speed: 5, up: 5, drag: 1.5 });
-    if (Math.random() < 0.4) toast(['Steve did not see that mailbox. Steve sees very little.', 'That was a federal offense. Probably.', 'Somebody\'s birthday card is now airborne.'][(Math.random() * 3) | 0]);
+  state.stats.smashed++;
+  if (K.bad) state.stats.bonks++;
+  if (K.pts) addScore(K.pts);
+  // Mid-streak, only the combo popups show, so the screen doesn't drown in "+1"s
+  const streaking = state.time - state.lastSmash < 1.5 && state.chaos >= 2;
+  const label = K.pts ? `${K.text} ${K.pts > 0 ? '+' : ''}${K.pts}` : K.text;
+  if (!streaking || K.bad) popup(label, p.home, K.bad ? 'bad' : 'fun', 1);
+  if (K.sound === 'boing') audio.boing();
+  else if (K.sound === 'clang') audio.clang();
+  else if (K.sound === 'crunch') audio.crunch();
+  else if (K.sound === 'squeak') audio.squeak();
+  else audio.bonk(0.6);
+  state.shake = Math.max(state.shake, K.slow < 0.9 ? 0.25 : 0.08);
+  if (p.kind === 'mailbox') {
+    burst(p.home.clone().add(new THREE.Vector3(0, 1, 0)), 10, { color: 0xffffff, size: 0.35, life: 2, grav: 2, speed: 5, up: 5, drag: 1.5 });
+    if (Math.random() < 0.4) toast(['Steve did not see that mailbox. Steve sees very little.', 'That was a federal offense. Probably.', "Somebody's birthday card is now airborne."][(Math.random() * 3) | 0]);
   } else if (p.kind === 'hydrant') {
-    addScore(-15);
-    state.stats.bonks++;
-    audio.bonk(1);
     audio.splash();
     p.geyser = 7;
     p.washed = false;
-    popup('HYDRANT! -15', pos, 'bad');
+  } else if (p.kind === 'lamp') {
+    burst(p.home.clone().add(new THREE.Vector3(0, 1, 0)), 8, { colors: [0xffd23f, 0xffffff], size: 0.12, life: 0.4, grav: 20, speed: 8, up: 5 });
+  }
+  // Chaos combo: wreck lots of stuff in quick succession
+  state.chaos = state.time - state.lastSmash < 1.5 ? state.chaos + 1 : 1;
+  state.lastSmash = state.time;
+  if (state.chaos > 0 && state.chaos % 5 === 0) {
+    const bonus = state.chaos * 2;
+    addScore(bonus);
+    popup(`CHAOS x${state.chaos}! +${bonus}`, truck.group.position, 'gold', 4);
+    audio.golden();
   }
 }
 
@@ -1835,6 +1963,185 @@ function updateGuide(time) {
 }
 
 // ---------------------------------------------------------------------------
+// Beach balls: bat them around the parks and plaza
+// ---------------------------------------------------------------------------
+const balls = world.balls.map(([x, z]) => {
+  const b = makeBeachBall();
+  scene.add(b.group);
+  return { ...b, home: [x, z], pos: new THREE.Vector3(), vel: new THREE.Vector3(), hitT: -9 };
+});
+function resetBalls() {
+  for (const b of balls) {
+    b.pos.set(b.home[0], surfaceHeight(b.home[0], b.home[1]) + 0.9, b.home[1]);
+    b.vel.set(0, 0, 0);
+    b.group.position.copy(b.pos);
+  }
+}
+const BALL_R = 0.9;
+function updateBalls(dt) {
+  const fx = Math.sin(T.heading);
+  const fz = Math.cos(T.heading);
+  for (const b of balls) {
+    // Truck hits: punt the ball
+    for (const off of [1.9, -1.9]) {
+      const dx = b.pos.x - (T.pos.x + fx * off);
+      const dz = b.pos.z - (T.pos.z + fz * off);
+      const d = Math.hypot(dx, dz);
+      if (d < 1.7 + BALL_R && b.pos.y < T.y + 3.5) {
+        const nx = dx / (d || 1);
+        const nz = dz / (d || 1);
+        const sp = Math.hypot(T.vel.x, T.vel.z);
+        b.vel.set(T.vel.x * 1.15 + nx * (4 + sp * 0.3), 5 + sp * 0.4, T.vel.z * 1.15 + nz * (4 + sp * 0.3));
+        b.pos.x = T.pos.x + fx * off + nx * (1.75 + BALL_R);
+        b.pos.z = T.pos.z + fz * off + nz * (1.75 + BALL_R);
+        if (state.time - b.hitT > 0.6) {
+          b.hitT = state.time;
+          audio.boing();
+          if (state.mode === 'playing') {
+            addScore(1);
+            popup('BOING! +1', b.pos, 'fun', 0);
+          }
+        }
+        break;
+      }
+    }
+    b.vel.y -= GRAVITY * 0.6 * dt;
+    b.pos.addScaledVector(b.vel, dt);
+    const floor = surfaceHeight(b.pos.x, b.pos.z) + BALL_R;
+    if (b.pos.y < floor) {
+      b.pos.y = floor;
+      b.vel.y = Math.abs(b.vel.y) > 2 ? -b.vel.y * 0.65 : 0;
+      b.vel.x *= 1 - Math.min(1, dt * 1.2);
+      b.vel.z *= 1 - Math.min(1, dt * 1.2);
+    }
+    // Bounce off buildings, trees and the edge of town
+    for (const w of world.boxes) {
+      const qx = Math.max(w.minX, Math.min(b.pos.x, w.maxX));
+      const qz = Math.max(w.minZ, Math.min(b.pos.z, w.maxZ));
+      const ex = b.pos.x - qx;
+      const ez = b.pos.z - qz;
+      const e = Math.hypot(ex, ez);
+      if (e < BALL_R && e > 1e-4) {
+        b.pos.x = qx + (ex / e) * BALL_R;
+        b.pos.z = qz + (ez / e) * BALL_R;
+        const vn = (b.vel.x * ex + b.vel.z * ez) / e;
+        if (vn < 0) {
+          b.vel.x -= (1.7 * vn * ex) / e;
+          b.vel.z -= (1.7 * vn * ez) / e;
+        }
+      }
+    }
+    for (const c of world.circles) {
+      const ex = b.pos.x - c.x;
+      const ez = b.pos.z - c.z;
+      const e = Math.hypot(ex, ez);
+      if (e < c.r + BALL_R && e > 1e-4) {
+        b.pos.x = c.x + (ex / e) * (c.r + BALL_R);
+        b.pos.z = c.z + (ez / e) * (c.r + BALL_R);
+        const vn = (b.vel.x * ex + b.vel.z * ez) / e;
+        if (vn < 0) {
+          b.vel.x -= (1.7 * vn * ex) / e;
+          b.vel.z -= (1.7 * vn * ez) / e;
+        }
+      }
+    }
+    b.group.position.copy(b.pos);
+    // Roll in the direction of travel
+    const v = Math.hypot(b.vel.x, b.vel.z);
+    if (v > 0.05) {
+      _ax.set(b.vel.z / v, 0, -b.vel.x / v);
+      b.ball.quaternion.premultiply(_q.setFromAxisAngle(_ax, (v * dt) / BALL_R));
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Pigeons in the plaza: they scatter when the truck shows up
+// ---------------------------------------------------------------------------
+const pigeons = [];
+for (const spot of world.pigeonSpots) {
+  for (let i = 0; i < 10; i++) {
+    const pg = makePigeon();
+    pg.group.scale.setScalar(1.3);
+    scene.add(pg.group);
+    pigeons.push({ ...pg, spot, state: 'peck', t: Math.random() * 3, pos: new THREE.Vector3(), vel: new THREE.Vector3(), h: 0 });
+  }
+}
+let lastFlutter = -9;
+function placePigeon(pg) {
+  let x;
+  let z;
+  do {
+    const a = Math.random() * Math.PI * 2;
+    const r = 6.5 + Math.random() * (pg.spot.r - 6.5);
+    x = pg.spot.x + Math.cos(a) * r;
+    z = pg.spot.z + Math.sin(a) * r;
+  } while (world.props.some((p) => Math.hypot(p.x - x, p.z - z) < p.r + 0.6));
+  pg.pos.set(x, LAWN_Y, z);
+  pg.h = Math.random() * 6;
+  pg.state = 'peck';
+  pg.group.visible = true;
+}
+function updatePigeons(dt, time) {
+  for (const pg of pigeons) {
+    pg.t -= dt;
+    const d = Math.hypot(pg.pos.x - T.pos.x, pg.pos.z - T.pos.z);
+    if (pg.state === 'peck') {
+      if (pg.t <= 0) {
+        pg.t = 0.5 + Math.random() * 2;
+        pg.h += (Math.random() - 0.5) * 2;
+      }
+      pg.pos.x += Math.sin(pg.h) * 0.3 * dt;
+      pg.pos.z += Math.cos(pg.h) * 0.3 * dt;
+      pg.group.rotation.x = Math.max(0, Math.sin(time * 9 + pg.pos.x * 3)) * 0.5; // peck peck
+      for (const w of pg.wings) w.rotation.z = 0;
+      if (d < 13) {
+        // Everybody panics
+        pg.state = 'fly';
+        pg.t = 4 + Math.random() * 2;
+        const ax = pg.pos.x - T.pos.x;
+        const az = pg.pos.z - T.pos.z;
+        const al = Math.hypot(ax, az) || 1;
+        pg.vel.set((ax / al) * 7 + (Math.random() - 0.5) * 4, 6 + Math.random() * 3, (az / al) * 7 + (Math.random() - 0.5) * 4);
+        pg.h = Math.atan2(pg.vel.x, pg.vel.z);
+        pg.group.rotation.x = -0.4;
+        if (time - lastFlutter > 1.5) {
+          lastFlutter = time;
+          audio.flutter();
+          if (state.mode === 'playing') popup('coo!!', pg.pos.clone(), 'fun', 0);
+        }
+      }
+    } else if (pg.state === 'fly') {
+      pg.vel.y += 1.5 * dt;
+      pg.pos.addScaledVector(pg.vel, dt);
+      const flap = Math.sin(time * 30 + pg.pos.x) * 0.9;
+      pg.wings[0].rotation.z = flap;
+      pg.wings[1].rotation.z = -flap;
+      if (pg.t <= 0) {
+        pg.state = 'away';
+        pg.group.visible = false;
+        pg.t = 12 + Math.random() * 8;
+      }
+    } else if (pg.state === 'away' && pg.t <= 0 && Math.hypot(pg.spot.x - T.pos.x, pg.spot.z - T.pos.z) > 40) {
+      placePigeon(pg);
+    }
+    pg.group.position.copy(pg.pos);
+    pg.group.rotation.y = pg.h;
+  }
+}
+
+// Driving through a bush makes it explode in leaves (it's fine, bushes are tough)
+function updateBushes() {
+  for (const b of world.bushes) {
+    if (Math.abs(b.x - T.pos.x) > 4 || Math.abs(b.z - T.pos.z) > 4) continue;
+    if (Math.hypot(b.x - T.pos.x, b.z - T.pos.z) < 2.6 && state.time - (b.t || -9) > 1.2 && Math.hypot(T.vel.x, T.vel.z) > 3) {
+      b.t = state.time;
+      leafBurst(b.x, b.z, 0.8, 10);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Treasures: shiny junk for Steve's hoard, scattered around town
 // ---------------------------------------------------------------------------
 const TREASURE_NAMES = [
@@ -1939,7 +2246,7 @@ function endShift() {
     ['Loads dumped', st.loads],
     ['Snacks eaten', st.snacks],
     ['Longest air', `${st.air.toFixed(1)}s`],
-    ['Mailboxes & hydrants', st.bonks],
+    ['Things knocked over', st.smashed],
     ['Treasures hoarded', `${st.treasures}/${treasures.length}`],
     ['Double grabs', st.doubles],
     ['Boosts', st.boosts],
@@ -1997,6 +2304,7 @@ function frame() {
     updateTruck(dt);
     updateGameplay(dt);
     updateProps(dt);
+    updateBushes();
     updateCats(dt, elapsed);
   } else if (state.mode === 'title' || state.mode === 'results') {
     updateCats(dt, elapsed);
@@ -2007,6 +2315,8 @@ function frame() {
     updateParticles(dt);
     animateTruck(dt, elapsed);
     updateAmbient(dt, elapsed);
+    updateBalls(dt);
+    updatePigeons(dt, elapsed);
   }
   // On the title screen, shift the view so Steve shows beside the menu card
   if (state.mode === 'title' && window.innerWidth > 900) {

@@ -5,7 +5,9 @@ import {
   toon, box, cyl, sphere, makeHouse, makeTree, makeBush, makeTrashCan, makeMarker, makeMailbox,
   makeHydrant, makeCone, makeTrashPile, makeSign, makeRamp, makeSeagull, makeLampPost, makeBench,
   makeFlowerBed, makePicnicTable, makeDumpster, makeBooth, makeStatue, makeTrashBag, makeTire,
+  makeFlamingo, makeGnome, makePicketFence,
 } from './models.js';
+import { PropBatch } from './props.js';
 
 export const N = 5; // blocks per side
 export const BLOCK = 40;
@@ -59,6 +61,15 @@ export function buildWorld(scene) {
     seagulls: [],
     ducks: [],
     fountains: [],
+    bushes: [], // {x,z} drive-through bushes (leaf bursts)
+    balls: [], // beach ball spawn spots
+    pigeonSpots: [],
+  };
+  world.batches = {
+    lamp: new PropBatch(scene, makeLampPost(), 140),
+    fence: new PropBatch(scene, makePicketFence(), 900),
+    flamingo: new PropBatch(scene, makeFlamingo(), 120),
+    gnome: new PropBatch(scene, makeGnome(), 120),
   };
 
   // Grass all around, one asphalt slab for every road (no z-fighting)
@@ -145,12 +156,7 @@ export function buildWorld(scene) {
 
       // Street lamps on every corner
       for (const [sx, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
-        const lamp = makeLampPost();
-        const x = cx + sx * (BLOCK / 2 - 0.8);
-        const z = cz + sz * (BLOCK / 2 - 0.8);
-        lamp.position.set(x, WALK_Y, z);
-        S.add(lamp);
-        world.circles.push({ x, z, r: 0.3 });
+        addBatchProp(world, 'lamp', cx + sx * (BLOCK / 2 - 0.8), cz + sz * (BLOCK / 2 - 0.8), 0.35, 'lamp');
       }
 
       if (type === 'houses') buildHouseBlock(S, scene, world, rand, cx, cz, bx, bz, streetNames, familyNames);
@@ -245,18 +251,44 @@ function bakeStatic(root, scene) {
   }
 }
 
-function addProp(scene, world, mesh, x, z, r, kind, rotY = 0) {
-  const y = surfaceHeight(x, z);
-  mesh.position.set(x, y, z);
-  mesh.rotation.y = rotY;
-  scene.add(mesh);
+function newProp(world, kind, x, z, r, rotY, y) {
   const p = {
-    mesh, kind, x, z, r, knocked: false,
-    vel: new THREE.Vector3(), spin: new THREE.Vector3(), home: new THREE.Vector3(x, y, z), homeRot: rotY, timer: 0,
+    kind, x, z, r, knocked: false, state: 'idle', timer: 0,
+    home: new THREE.Vector3(x, y, z),
+    homeQuat: new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotY),
+    pos: new THREE.Vector3(x, y, z),
+    quat: new THREE.Quaternion(),
+    vel: new THREE.Vector3(), spin: new THREE.Vector3(),
   };
+  p.quat.copy(p.homeQuat);
   world.props.push(p);
   return p;
 }
+
+/** A knockable prop backed by its own mesh. */
+function addProp(scene, world, mesh, x, z, r, kind, rotY = 0) {
+  const y = surfaceHeight(x, z);
+  mesh.position.set(x, y, z);
+  mesh.rotation.set(0, rotY, 0);
+  scene.add(mesh);
+  const p = newProp(world, kind, x, z, r, rotY, y);
+  p.mesh = mesh;
+  return p;
+}
+
+const _m4 = new THREE.Matrix4();
+const _one = new THREE.Vector3(1, 1, 1);
+/** A knockable prop drawn as one instance of a shared batch. */
+function addBatchProp(world, batchName, x, z, r, kind, rotY = 0) {
+  const y = surfaceHeight(x, z);
+  const p = newProp(world, kind, x, z, r, rotY, y);
+  p.batch = world.batches[batchName];
+  p.index = p.batch.add();
+  p.batch.set(p.index, _m4.compose(p.pos, p.quat, _one));
+  return p;
+}
+
+const treeCircle = (world, x, z, r) => world.circles.push({ x, z, r, tree: true });
 
 function buildHouseBlock(S, scene, world, rand, cx, cz, bx, bz, streetNames, familyNames) {
   // One house per side, facing the road.
@@ -308,6 +340,7 @@ function buildHouseBlock(S, scene, world, rand, cx, cz, bx, bz, streetNames, fam
         b.position.set(bx2, LAWN_Y, bz2);
         b.rotation.y = facing;
         S.add(b);
+        world.bushes.push({ x: bx2, z: bz2 });
       }
     }
 
@@ -348,12 +381,33 @@ function buildHouseBlock(S, scene, world, rand, cx, cz, bx, bz, streetNames, fam
     const mb = makeMailbox(rand);
     const [mbx, mbz] = at(curb, 1.3);
     addProp(scene, world, mb, mbx, mbz, 0.4, 'mailbox', facing);
+
+    // White picket fence along the front of some yards, with gaps for the
+    // path and driveway
+    if (rand() < 0.6) {
+      const fenceLine = BLOCK / 2 - 1.8;
+      for (let side = -14.4; side <= 14.4; side += 2.4) {
+        if (Math.abs(side) < 1.6) continue; // front path
+        if (side > dwSide - 2.0 && side < dwSide + 2.0) continue; // driveway
+        const [fx, fz] = at(fenceLine, side);
+        addBatchProp(world, 'fence', fx, fz, 0.9, 'fence', facing);
+      }
+    }
+    // Lawn ornaments: a pink flamingo or a garden gnome (or both)
+    if (rand() < 0.55) {
+      const [ox, oz] = at(front + 3.2, -w / 3.3 - 0.4);
+      addBatchProp(world, 'flamingo', ox, oz, 0.45, 'flamingo', facing + rand() * 2 - 1);
+    }
+    if (rand() < 0.45) {
+      const [ox, oz] = at(front + 2.2, 1.6);
+      addBatchProp(world, 'gnome', ox, oz, 0.4, 'gnome', facing + rand() - 0.5);
+    }
   }
   // Backyard: a big shade tree and a few smaller ones in the gaps
   const t = makeTree(rand, 1.2);
   t.position.set(cx, LAWN_Y, cz);
   S.add(t);
-  world.circles.push({ x: cx, z: cz, r: 1 });
+  treeCircle(world, cx, cz, 1);
   for (const [sx, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
     if (rand() < 0.35) continue;
     const tr = makeTree(rand, 0.9 + rand() * 0.3);
@@ -361,7 +415,7 @@ function buildHouseBlock(S, scene, world, rand, cx, cz, bx, bz, streetNames, fam
     const z = cz + sz * 15.5;
     tr.position.set(x, LAWN_Y, z);
     S.add(tr);
-    world.circles.push({ x, z, r: 0.8 });
+    treeCircle(world, x, z, 0.8);
   }
   // Fire hydrant partway down one side
   if (rand() < 0.7) {
@@ -399,10 +453,7 @@ function buildPark(S, scene, world, rand, cx, cz) {
   // Sign beside the approach, facing oncoming drivers
   const sign = makeSign(['SICK JUMP', 'ZONE'], '#e17055', 4.6, 1.8);
   const [gx, gz] = at(-len / 2 - 6, 6.2);
-  sign.position.set(gx, LAWN_Y, gz);
-  sign.rotation.y = Math.atan2(-dX, -dZ);
-  S.add(sign);
-  world.circles.push({ x: gx, z: gz, r: 0.6 });
+  addProp(scene, world, sign, gx, gz, 1.2, 'sign', Math.atan2(-dX, -dZ));
 
   // Trees around the edge, keeping the runway clear
   for (let k = 0; k < 12; k++) {
@@ -414,7 +465,7 @@ function buildPark(S, scene, world, rand, cx, cz) {
     const tr = makeTree(rand, 1 + rand() * 0.4);
     tr.position.set(x, LAWN_Y, z);
     S.add(tr);
-    world.circles.push({ x, z, r: 0.9 });
+    treeCircle(world, x, z, 0.9);
   }
 
   // Pond with stones, a duck, and benches facing it
@@ -442,20 +493,13 @@ function buildPark(S, scene, world, rand, cx, cz) {
   duck.userData.duck = { cx: ox, cz: oz };
   scene.add(duck);
   world.ducks.push(duck);
-  const bench = makeBench();
   const [bx, bz] = at(6, -4.6);
-  bench.position.set(bx, LAWN_Y, bz);
-  bench.rotation.y = Math.atan2(lX, lZ) + Math.PI;
-  S.add(bench);
-  world.circles.push({ x: bx, z: bz, r: 1.1 });
+  addProp(scene, world, makeBench(), bx, bz, 1.0, 'bench', Math.atan2(lX, lZ) + Math.PI);
 
   // Picnic table and flowers in the other quadrants
   const [tx, tz] = at(-7, 10);
-  const table = makePicnicTable();
-  table.position.set(tx, LAWN_Y, tz);
-  table.rotation.y = rand() * 3;
-  S.add(table);
-  world.circles.push({ x: tx, z: tz, r: 1.4 });
+  addProp(scene, world, makePicnicTable(), tx, tz, 1.2, 'table', rand() * 3);
+  world.balls.push([cx + dX * 2 + lX * 8, cz + dZ * 2 + lZ * 8], [cx - dX * 9 + lX * 3, cz - dZ * 9 + lZ * 3]);
   for (const [u, v] of [[8, 10], [-9, -10]]) {
     const [fx, fz] = at(u, v);
     const bed = makeFlowerBed(rand, 2);
@@ -513,18 +557,13 @@ function buildPlaza(S, scene, world, rand, cx, cz) {
   world.fountains.push({ x: cx, z: cz, y: LAWN_Y + 2.6 });
 
   const sign = makeSign(['OUR HERO', '(unknown raccoon)'], '#6c5ce7', 5, 1.7);
-  sign.position.set(cx + 10.6, LAWN_Y, cz + 10.6);
-  sign.rotation.y = Math.PI / 4;
-  S.add(sign);
-  world.circles.push({ x: cx + 10.6, z: cz + 10.6, r: 0.6 });
+  addProp(scene, world, sign, cx + 10.6, cz + 10.6, 1.2, 'sign', Math.PI / 4);
+  world.balls.push([cx - 10, cz + 4], [cx + 4, cz - 11]);
+  world.pigeonSpots.push({ x: cx, z: cz, r: 11 });
 
   // Benches facing the fountain, flower beds and trees in the corners
   for (const [dx, dz] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
-    const b = makeBench();
-    b.position.set(cx + dx * 8.5, LAWN_Y, cz + dz * 8.5);
-    b.rotation.y = Math.atan2(-dx, -dz);
-    S.add(b);
-    world.circles.push({ x: cx + dx * 8.5, z: cz + dz * 8.5, r: 1.1 });
+    addProp(scene, world, makeBench(), cx + dx * 8.5, cz + dz * 8.5, 1.0, 'bench', Math.atan2(-dx, -dz));
   }
   for (const [sx, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
     const bed = makeFlowerBed(rand, 2.6);
@@ -533,11 +572,8 @@ function buildPlaza(S, scene, world, rand, cx, cz) {
     const tr = makeTree(rand, 1.1);
     tr.position.set(cx + sx * 13, LAWN_Y + 0.35, cz + sz * 13);
     S.add(tr);
-    world.circles.push({ x: cx + sx * 13, z: cz + sz * 13, r: 2.6 });
-    const lamp = makeLampPost();
-    lamp.position.set(cx + sx * 6.5, LAWN_Y, cz + sz * 6.5);
-    S.add(lamp);
-    world.circles.push({ x: cx + sx * 6.5, z: cz + sz * 6.5, r: 0.3 });
+    treeCircle(world, cx + sx * 13, cz + sz * 13, 2.6);
+    addBatchProp(world, 'lamp', cx + sx * 6.5, cz + sz * 6.5, 0.35, 'lamp');
   }
 }
 
@@ -624,16 +660,17 @@ function buildDump(S, scene, world, rand, cx, cz) {
   booth.rotation.y = Math.PI;
   S.add(booth);
   world.boxes.push({ minX: cx + 12.8, maxX: cx + 16.2, minZ: cz + 12, maxZ: cz + 15 });
-  for (let k = 0; k < 4; k++) {
-    const b = makeTrashBag(rand);
-    b.position.set(cx + 16.5 - k * 1.1, LAWN_Y, cz + 4 + rand());
-    S.add(b);
+  for (let k = 0; k < 5; k++) {
+    addProp(scene, world, makeTrashBag(rand), cx + 16.5 - k * 1.3, cz + 4 + rand(), 0.6, 'bag', rand() * 6);
   }
-  const tire = makeTire();
-  tire.rotation.x = Math.PI / 2;
-  tire.position.set(cx + 16, LAWN_Y + 0.25, cz - 1.5);
-  S.add(tire);
-  world.circles.push({ x: cx + 15.5, z: cz + 3, r: 1.2 });
+  for (let k = 0; k < 3; k++) {
+    const tire = new THREE.Group();
+    const t = makeTire();
+    t.rotation.x = Math.PI / 2;
+    t.position.y = 0.25 + k * 0.5;
+    tire.add(t);
+    addProp(scene, world, tire, cx + 16 - (k % 2) * 0.2, cz - 1.5 - k * 1.6, 0.8, 'tire');
+  }
 
   // Unload pad
   const padX = cx - 7.5;
@@ -650,9 +687,7 @@ function buildDump(S, scene, world, rand, cx, cz) {
   world.dump = { x: padX, z: padZ, r: 6, pad, padRing };
 
   const sign = makeSign(['THE DUMP', 'unload here ♥'], '#8e5b3d', 6, 2.2);
-  sign.position.set(cx - F - 0.9, WALK_Y, cz - 7);
-  sign.rotation.y = -Math.PI / 2;
-  S.add(sign);
+  addProp(scene, world, sign, cx - F - 0.9, cz - 7, 1.2, 'sign', -Math.PI / 2);
 
   for (let k = 0; k < 5; k++) {
     const g = makeSeagull();

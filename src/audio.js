@@ -157,6 +157,23 @@ export class Audio {
   beep() {
     this.tone(1000, 0.12, { type: 'square', vol: 0.05 });
   }
+  clang() {
+    this.tone(880, 0.35, { type: 'square', vol: 0.06, slide: -200 });
+    this.tone(1320, 0.25, { type: 'triangle', vol: 0.07 });
+    this.noise(0.08, { vol: 0.15, freq: 3000 });
+  }
+  crunch() {
+    for (let i = 0; i < 3; i++) this.noise(0.06, { vol: 0.28, freq: 500 + i * 300, q: 1.5, delay: i * 0.04 });
+  }
+  squeak() {
+    this.tone(1400, 0.15, { type: 'sine', vol: 0.12, slide: 600 });
+  }
+  rustle() {
+    this.noise(0.35, { vol: 0.16, freq: 4000, q: 0.6 });
+  }
+  flutter() {
+    for (let i = 0; i < 5; i++) this.noise(0.05, { vol: 0.12, freq: 1800, q: 2, delay: i * 0.06 });
+  }
   chargeUp(level) {
     this.tone(500 + level * 250, 0.12, { type: 'triangle', vol: 0.12, slide: 300 });
   }
