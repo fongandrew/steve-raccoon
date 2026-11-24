@@ -157,6 +157,12 @@ export class Audio {
   beep() {
     this.tone(1000, 0.12, { type: 'square', vol: 0.05 });
   }
+  timber() {
+    // creak... then the crash
+    this.tone(140, 0.7, { type: 'sawtooth', vol: 0.08, slide: -60 });
+    this.tone(210, 0.5, { type: 'triangle', vol: 0.06, slide: 120, delay: 0.1 });
+    this.noise(0.6, { vol: 0.3, freq: 700, q: 0.8, delay: 0.55 });
+  }
   yip() {
     this.tone(950, 0.08, { type: 'square', vol: 0.07, slide: -250 });
     this.tone(1050, 0.08, { type: 'square', vol: 0.06, slide: -300, delay: 0.12 });

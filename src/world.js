@@ -78,6 +78,7 @@ export function buildWorld(scene) {
     pumpkin: new PropBatch(scene, makePumpkin(), 40),
     carrots: new PropBatch(scene, makeCarrots(), 40),
     sunflower: new PropBatch(scene, makeSunflower(), 40),
+    ...treeBatches(scene),
   };
 
   // Grass all around, one asphalt slab for every road (no z-fighting)
@@ -306,6 +307,35 @@ function addBatchProp(world, batchName, x, z, r, kind, rotY = 0) {
 
 const treeCircle = (world, x, z, r) => world.circles.push({ x, z, r, tree: true });
 
+/** A few tree templates (three leafy, one pine) drawn as instanced batches. */
+function treeBatches(scene) {
+  const out = {};
+  let leafy = 0;
+  let pine = false;
+  for (let seed = 1; seed < 80 && (leafy < 3 || !pine); seed++) {
+    const t = makeTree(rng(seed * 7919));
+    const isPine = t.children.some((m) => m.geometry && m.geometry.type === 'ConeGeometry');
+    if (isPine && !pine) {
+      pine = true;
+      out.tree3 = new PropBatch(scene, t, 150);
+    } else if (!isPine && leafy < 3) {
+      out[`tree${leafy++}`] = new PropBatch(scene, t, 150);
+    }
+  }
+  return out;
+}
+
+/** A tree that blocks the truck but falls over if hit hard (or often) enough. */
+function addTree(world, rand, x, z, scale, r) {
+  const variant = rand() < 0.22 ? 3 : (rand() * 3) | 0;
+  const p = addBatchProp(world, `tree${variant}`, x, z, r, 'tree', rand() * 6);
+  p.scale = scale;
+  p.batch.set(p.index, _m4.compose(p.pos, p.quat, new THREE.Vector3(scale, scale, scale)));
+  const circle = { x, z, r, tree: true, prop: p, dmg: 0 };
+  p.circle = circle;
+  world.circles.push(circle);
+}
+
 function buildHouseBlock(S, scene, world, rand, cx, cz, bx, bz, streetNames, familyNames) {
   // One house per side, facing the road.
   const sides = [
@@ -420,18 +450,10 @@ function buildHouseBlock(S, scene, world, rand, cx, cz, bx, bz, streetNames, fam
     }
   }
   // Backyard: a big shade tree and a few smaller ones in the gaps
-  const t = makeTree(rand, 1.2);
-  t.position.set(cx, LAWN_Y, cz);
-  S.add(t);
-  treeCircle(world, cx, cz, 1);
+  addTree(world, rand, cx, cz, 1.2, 1);
   for (const [sx, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
     if (rand() < 0.35) continue;
-    const tr = makeTree(rand, 0.9 + rand() * 0.3);
-    const x = cx + sx * 15.5;
-    const z = cz + sz * 15.5;
-    tr.position.set(x, LAWN_Y, z);
-    S.add(tr);
-    treeCircle(world, x, z, 0.8);
+    addTree(world, rand, cx + sx * 15.5, cz + sz * 15.5, 0.9 + rand() * 0.3, 0.8);
   }
   // Fire hydrant partway down one side
   if (rand() < 0.7) {
@@ -478,10 +500,7 @@ function buildPark(S, scene, world, rand, cx, cz) {
     const v = Math.sin(a) * 15.5;
     if (Math.abs(v) < 6) continue;
     const [x, z] = at(u, v);
-    const tr = makeTree(rand, 1 + rand() * 0.4);
-    tr.position.set(x, LAWN_Y, z);
-    S.add(tr);
-    treeCircle(world, x, z, 0.9);
+    addTree(world, rand, x, z, 1 + rand() * 0.4, 0.9);
   }
 
   // Pond with stones, a duck, and benches facing it
@@ -575,7 +594,7 @@ function buildPlaza(S, scene, world, rand, cx, cz) {
   const sign = makeSign(['OUR HERO', '(unknown raccoon)'], '#6c5ce7', 5, 1.7);
   addProp(scene, world, sign, cx + 10.6, cz + 10.6, 1.2, 'sign', Math.PI / 4);
   world.balls.push([cx - 10, cz + 4], [cx + 4, cz - 11]);
-  addBin(S, scene, world, cx, cz - (BLOCK / 2 - 1.7), Math.PI, 0x2d936c);
+  addBin(S, scene, world, cx, cz - 13.5, Math.PI, 0x2d936c);
   world.pigeonSpots.push({ x: cx, z: cz, r: 11 });
 
   // Benches facing the fountain, flower beds and trees in the corners
@@ -718,6 +737,8 @@ function buildDump(S, scene, world, rand, cx, cz) {
 // Special blocks
 // ---------------------------------------------------------------------------
 
+const blockAt = (v) => blockCenter(Math.max(0, Math.min(N - 1, Math.floor((v + HALF) / PITCH))));
+
 /** Static AABB collider for a footprint centered at (x, z). */
 function solid(world, x, z, w, d) {
   const b = { minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2 };
@@ -733,6 +754,22 @@ function paving(S, x, z, w, d, color = 0xc7c2b4) {
 
 /** A big dumpster at the curb, facing the road, for the front loader. */
 function addBin(S, scene, world, x, z, facing, color) {
+  // Paved approach from the curb so the truck can drive straight in
+  const fx = Math.sin(facing);
+  const fz = Math.cos(facing);
+  const sx = Math.abs(fx) > 0.5;
+  const edge = sx ? (fx > 0 ? 1 : -1) : fz > 0 ? 1 : -1;
+  const curbDist = Math.abs(sx ? x - blockAt(x) : z - blockAt(z)) ;
+  const len = BLOCK / 2 - curbDist + 1;
+  const mid = len / 2 - 1;
+  const pad = box(sx ? len : 5.5, 0.04, sx ? 5.5 : len, 0xb9b2a4, x + (sx ? edge * mid : 0), LAWN_Y + 0.025, z + (sx ? 0 : edge * mid));
+  pad.castShadow = false;
+  S.add(pad);
+  for (const k of [-1, 1]) {
+    const line = box(sx ? len : 0.18, 0.05, sx ? 0.18 : len, 0xffd23f, x + (sx ? edge * mid : k * 2.6), LAWN_Y + 0.03, z + (sx ? k * 2.6 : edge * mid));
+    line.castShadow = false;
+    S.add(line);
+  }
   const g = makeDumpster(color);
   g.position.set(x, WALK_Y, z);
   g.rotation.y = facing;
@@ -750,10 +787,7 @@ function addBin(S, scene, world, x, z, facing, color) {
 function cornerTrees(S, world, rand, cx, cz, skip = []) {
   for (const [sx, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
     if (skip.some(([a, b]) => a === sx && b === sz)) continue;
-    const tr = makeTree(rand, 1 + rand() * 0.3);
-    tr.position.set(cx + sx * 15.5, LAWN_Y, cz + sz * 15.5);
-    S.add(tr);
-    treeCircle(world, cx + sx * 15.5, cz + sz * 15.5, 0.9);
+    addTree(world, rand, cx + sx * 15.5, cz + sz * 15.5, 1 + rand() * 0.3, 0.9);
   }
 }
 
@@ -769,7 +803,7 @@ function buildBar(S, scene, world, rand, cx, cz) {
   // parking lot out back, with the dumpster
   paving(S, cx, cz - 12, 30, 11, 0x6a6f7b);
   for (let x = -12; x <= 12; x += 4) paving(S, cx + x, cz - 12, 0.15, 5, 0xfffbe8);
-  addBin(S, scene, world, cx + 6, cz - (BLOCK / 2 - 1.7), Math.PI, 0x3d7ea6);
+  addBin(S, scene, world, cx + 6, cz - 6.6, Math.PI, 0x3d7ea6);
   cornerTrees(S, world, rand, cx, cz, [[1, -1], [-1, -1]]);
   for (let k = 0; k < 2; k++) addBatchProp(world, 'gnome', cx + 9 + k, cz + 7.5, 0.4, 'gnome', rand() * 6);
 }
@@ -796,7 +830,7 @@ function buildSchool(S, scene, world, rand, cx, cz) {
   bus.position.set(cx + 11, LAWN_Y, cz + 9);
   S.add(bus);
   solid(world, cx + 11, cz + 9, 2.8, 10.6);
-  addBin(S, scene, world, cx + (BLOCK / 2 - 1.7), cz - 8, Math.PI / 2, 0x2d936c);
+  addBin(S, scene, world, cx + 13.5, cz - 8, Math.PI / 2, 0x2d936c);
   cornerTrees(S, world, rand, cx, cz, [[1, 1], [1, -1]]);
   // hopscotch
   for (let i = 0; i < 6; i++) paving(S, cx - 2.5, cz + 2 + i * 1.1, 1, 1, i % 2 ? 0xfff3b0 : 0xffb3c1);
@@ -816,7 +850,7 @@ function buildFirehouse(S, scene, world, rand, cx, cz) {
   solid(world, cx - 7, cz + 3.5, 2.8, 7.6);
   addProp(scene, world, makeHydrant(), cx + 7, cz + 4, 0.4, 'hydrant');
   addProp(scene, world, makeHydrant(), cx - 12.5, cz + 4, 0.4, 'hydrant');
-  addBin(S, scene, world, cx + (BLOCK / 2 - 1.7), cz + 9, Math.PI / 2, 0xc8402e);
+  addBin(S, scene, world, cx + 12, cz + 9, Math.PI / 2, 0xc8402e);
   world.critterSpots.push({ species: 'dalmatian', x: cx + 3, z: cz + 6 });
   cornerTrees(S, world, rand, cx, cz, [[1, 1], [-1, 1]]);
 }

@@ -88,6 +88,11 @@ const LINES = {
     'Everyone in Binsville has learned to jump. It is a survival skill now.',
     'Steve waves an apology. It is not accepted.',
   ],
+  timber: [
+    'TIMBERRRRR! The tree had it coming. Probably.',
+    'Steve is now also in the logging business.',
+    'The squirrels will be filing a complaint.',
+  ],
   garden: [
     'The community garden club will hear about this.',
     'Steve is harvesting. Aggressively.',
@@ -131,7 +136,8 @@ const RANKS = [
 // ---------------------------------------------------------------------------
 const container = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+const SMALL_DEVICE = window.matchMedia('(pointer: coarse)').matches || Math.min(window.innerWidth, window.innerHeight) < 540;
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, SMALL_DEVICE ? 1.5 : 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -228,7 +234,7 @@ const hemi = new THREE.HemisphereLight(0xffffff, 0x9cc27a, 1.6);
 scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffffff, 2.2);
 sun.castShadow = true;
-sun.shadow.mapSize.set(4096, 4096);
+sun.shadow.mapSize.set(SMALL_DEVICE ? 2048 : 4096, SMALL_DEVICE ? 2048 : 4096);
 Object.assign(sun.shadow.camera, { left: -75, right: 75, top: 75, bottom: -75, near: 1, far: 260 });
 sun.shadow.bias = -0.0005;
 sun.shadow.normalBias = 0.05;
@@ -605,7 +611,16 @@ window.addEventListener('keyup', (e) => {
   const k = KEYMAP[e.code];
   if (k) keys.delete(k);
 });
-for (const btn of document.querySelectorAll('#touch button')) {
+// --- Touch: a floating thumbstick on the left, DRIFT + HONK on the right,
+// tap Steve's portrait to snack, pause button for everything else.
+const stick = { active: false, id: null, ox: 0, oy: 0, x: 0, y: 0 };
+function enableTouch() {
+  if (!document.body.classList.contains('touch')) document.body.classList.add('touch');
+}
+if (window.matchMedia('(pointer: coarse)').matches) enableTouch();
+window.addEventListener('touchstart', enableTouch, { passive: true });
+
+for (const btn of document.querySelectorAll('#touch .tbtn')) {
   const k = btn.dataset.key;
   const down = (e) => {
     e.preventDefault();
@@ -625,6 +640,54 @@ for (const btn of document.querySelectorAll('#touch button')) {
   btn.addEventListener('pointercancel', up);
   btn.addEventListener('pointerleave', up);
 }
+{
+  const zone = document.getElementById('stickZone');
+  const ring = document.getElementById('stick');
+  const knob = document.getElementById('knob');
+  const R = 50;
+  const move = (e) => {
+    if (e.pointerId !== stick.id) return;
+    let dx = e.clientX - stick.ox;
+    let dy = e.clientY - stick.oy;
+    const d = Math.hypot(dx, dy);
+    if (d > R) {
+      // drag the base along so the stick never feels stuck at the rim
+      stick.ox += (dx / d) * (d - R);
+      stick.oy += (dy / d) * (d - R);
+      dx = (dx / d) * R;
+      dy = (dy / d) * R;
+      ring.style.left = `${stick.ox}px`;
+      ring.style.top = `${stick.oy}px`;
+    }
+    stick.x = dx / R;
+    stick.y = dy / R;
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+  };
+  zone.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    audio.init();
+    audio.resume();
+    zone.setPointerCapture(e.pointerId);
+    Object.assign(stick, { active: true, id: e.pointerId, ox: e.clientX, oy: e.clientY, x: 0, y: 0 });
+    ring.style.left = `${e.clientX}px`;
+    ring.style.top = `${e.clientY}px`;
+    knob.style.transform = '';
+    ring.classList.add('on');
+  });
+  zone.addEventListener('pointermove', move);
+  const end = (e) => {
+    if (e.pointerId !== stick.id) return;
+    Object.assign(stick, { active: false, id: null, x: 0, y: 0 });
+    ring.classList.remove('on');
+  };
+  zone.addEventListener('pointerup', end);
+  zone.addEventListener('pointercancel', end);
+}
+document.getElementById('portrait').addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  audio.init();
+  pressed.add('snack');
+});
 
 // ---------------------------------------------------------------------------
 // Game state
@@ -672,7 +735,7 @@ function resetGame() {
   Object.assign(state, {
     time: 0, score: 0, load: 0, hunger: 100, hangry: false, zoomT: 0, hicT: 0, chompT: 0, snackCd: 0, honkCd: 0,
     grabs: [], driftCharge: 0, boostT: 0, goldenHour: false, spawnT: 0, streak: 0, lastCollect: -99, dumping: null, quipT: 18, shake: 0, celebrateT: 0, warned: false,
-    stats: { cans: 0, golden: 0, dumpsters: 0, bags: 0, snacks: 0, bonks: 0, cats: 0, air: 0, loads: 0, doubles: 0, treasures: 0, boosts: 0, smashed: 0, geese: 0, dumped: 0 },
+    stats: { cans: 0, golden: 0, dumpsters: 0, bags: 0, snacks: 0, bonks: 0, cats: 0, air: 0, loads: 0, doubles: 0, treasures: 0, boosts: 0, smashed: 0, geese: 0, dumped: 0, trees: 0 },
     chaos: 0, lastSmash: -9,
   });
   for (const h of world.houses) {
@@ -705,6 +768,10 @@ function resetProp(p) {
   p.quat.copy(p.homeQuat);
   p.geyser = 0;
   p.hidden = false;
+  if (p.circle) {
+    p.circle.off = false;
+    p.circle.dmg = 0;
+  }
   syncProp(p);
 }
 
@@ -716,7 +783,7 @@ function syncProp(p) {
     p.mesh.position.copy(p.pos);
     p.mesh.quaternion.copy(p.quat);
   } else {
-    _ps.setScalar(p.hidden ? 0 : 1);
+    _ps.setScalar(p.hidden ? 0 : p.scale || 1);
     p.batch.set(p.index, _pm.compose(p.pos, p.quat, _ps));
   }
 }
@@ -958,9 +1025,15 @@ const prevPos = new THREE.Vector3();
 
 function updateTruck(dt) {
   const playing = state.mode === 'playing';
-  const gas = playing && keys.has('gas') ? 1 : 0;
-  const brake = playing && keys.has('brake') ? 1 : 0;
-  const steerIn = playing ? (keys.has('left') ? 1 : 0) - (keys.has('right') ? 1 : 0) : 0;
+  // Thumbstick: push any way but down to drive (steering by its sideways
+  // amount), pull down to brake / reverse.
+  const sMag = Math.hypot(stick.x, stick.y);
+  const stickGas = stick.active && sMag > 0.3 && stick.y < 0.45;
+  const stickBrake = stick.active && stick.y > 0.55;
+  const gas = playing && (keys.has('gas') || stickGas) ? 1 : 0;
+  const brake = playing && (keys.has('brake') || stickBrake) ? 1 : 0;
+  let steerIn = playing ? (keys.has('left') ? 1 : 0) - (keys.has('right') ? 1 : 0) : 0;
+  if (playing && stick.active && Math.abs(stick.x) > 0.12) steerIn = -Math.max(-1, Math.min(1, stick.x * 1.25));
   const drift = playing && keys.has('drift');
 
   const fx = Math.sin(T.heading);
@@ -988,7 +1061,7 @@ function updateTruck(dt) {
   }
 
   // Drift charging: hold drift while turning at speed; let go to boost
-  const drifting = drift && T.grounded && Math.abs(fwd) > 8 && steerIn !== 0;
+  const drifting = drift && T.grounded && Math.abs(fwd) > 8 && Math.abs(steerIn) > 0.3;
   if (drifting) {
     const before = boostLevel(state.driftCharge);
     state.driftCharge = Math.min(2.2, state.driftCharge + dt);
@@ -1110,16 +1183,27 @@ function updateTruck(dt) {
       maxImpact = Math.max(maxImpact, resolve(c, nx, nz, pen));
     }
     for (const s of world.circles) {
+      if (s.off) continue;
       const dx = c.x - s.x;
       const dz = c.z - s.z;
       const d = Math.hypot(dx, dz);
       const rr = r + s.r;
       if (d >= rr || d < 1e-4) continue;
+      // Trees take damage: one big hit or a few smaller ones and down they go
+      if (s.prop) {
+        const vn = -(T.vel.x * dx + T.vel.z * dz) / d;
+        if (vn > 2 && (vn > 15 || s.dmg + vn > 26)) {
+          fellTree(s, -dx / d, -dz / d);
+          continue;
+        }
+        if (vn > 3 && state.time - (s.shook || -9) > 0.4) s.dmg += vn;
+      }
       const hit = resolve(c, dx / d, dz / d, rr - d);
       maxImpact = Math.max(maxImpact, hit);
       if (s.tree && hit > 3 && state.time - (s.shook || -9) > 0.8) {
         s.shook = state.time;
         leafBurst(s.x, s.z, 3.5, 14 + hit);
+        if (s.prop && s.dmg > 8) popup(s.dmg > 18 ? 'creeeak...' : 'wobble', s.prop.home, 'fun', 3);
       }
     }
   }
@@ -1144,6 +1228,21 @@ function releaseBoost() {
   // instant kick forward
   T.vel.x += Math.sin(T.heading) * 4 * level;
   T.vel.z += Math.cos(T.heading) * 4 * level;
+}
+
+function fellTree(circle, nx, nz) {
+  circle.off = true;
+  const p = circle.prop;
+  T.vel.multiplyScalar(0.8);
+  knockProp(p, nx, nz, Math.hypot(T.vel.x, T.vel.z));
+  leafBurst(circle.x, circle.z, 3.5, 24);
+  audio.timber();
+  state.shake = Math.max(state.shake, 0.45);
+  if (state.mode === 'playing') {
+    state.stats.trees++;
+    popup('TIMBERRRRR!', p.home, 'gold', 5);
+    narrate('timber', state.stats.trees === 1 ? 1 : 0.4, state.stats.trees === 1);
+  }
 }
 
 const LEAF_COLORS = [0x5cc96b, 0x48b85a, 0x7bd67a, 0x3fa65a];
@@ -1207,6 +1306,7 @@ const KINDS = {
   tire: { style: 'fly', pts: 1, slow: 0.97, text: 'boing!', sound: 'boing', light: true },
   veggie: { style: 'fly', pts: 1, slow: 0.99, text: 'squish!', sound: 'crunch', light: true, debris: [0x6fbf4a, 0x9fd86b, 0xff8c2a] },
   sunflower: { style: 'tip', pts: 1, slow: 0.98, text: 'timber!', sound: 'crunch' },
+  tree: { style: 'tip', pts: 5, slow: 0.8, text: 'TIMBER!', sound: 'crunch', quiet: true },
   scarecrow: { style: 'tip', pts: 3, slow: 0.95, text: 'scarecrow down!', sound: 'crunch' },
 };
 
@@ -1220,6 +1320,7 @@ function updateProps(dt) {
   const fz = Math.cos(T.heading);
   for (const p of world.props) {
     if (!p.knocked) {
+      if (p.kind === 'tree') continue; // trees only fall to real damage (see fellTree)
       if (T.y > p.home.y + 2) continue;
       // cheap reject before the per-circle test
       if (Math.abs(p.x - T.pos.x) > 6 || Math.abs(p.z - T.pos.z) > 6) continue;
@@ -1259,7 +1360,7 @@ function updateProps(dt) {
       syncProp(p);
     } else if (p.state === 'tip') {
       // falls over from its base like a felled tree, with a little bounce
-      p.tipW += (9 * Math.sin(Math.max(0.05, p.tipA)) + 1) * dt;
+      p.tipW += ((p.kind === 'tree' ? 4.5 : 9) * Math.sin(Math.max(0.05, p.tipA)) + 1) * dt;
       p.tipA += p.tipW * dt;
       if (p.tipA >= Math.PI / 2 - 0.02) {
         p.tipA = Math.PI / 2 - 0.02;
@@ -1268,7 +1369,12 @@ function updateProps(dt) {
           if (!p.landed) {
             p.landed = true;
             audio.bonk(0.25);
-            const tipEnd = p.home.clone().addScaledVector(_ax.copy(p.tipDir), p.kind === 'lamp' ? 5 : 3);
+            const tipEnd = p.home.clone().addScaledVector(_ax.copy(p.tipDir), p.kind === 'lamp' ? 5 : p.kind === 'tree' ? 4 : 3);
+            if (p.kind === 'tree') {
+              leafBurst(tipEnd.x, tipEnd.z, 0.8, 22);
+              audio.bonk(0.8);
+              state.shake = Math.max(state.shake, 0.35);
+            }
             burst(tipEnd, 6, { color: 0xd9d4c7, size: 0.4, life: 0.6, grav: 4, speed: 4, up: 2, sphere: true, grow: 1.5, alpha: 0.6 });
           }
         } else {
@@ -1295,7 +1401,7 @@ function updateProps(dt) {
         audio.splash();
       }
     }
-    if (p.timer > 30 && Math.hypot(T.pos.x - p.home.x, T.pos.z - p.home.z) > 45) resetProp(p);
+    if (p.timer > (p.kind === 'tree' ? 60 : 30) && Math.hypot(T.pos.x - p.home.x, T.pos.z - p.home.z) > 45) resetProp(p);
   }
 }
 
@@ -1347,7 +1453,7 @@ function knockProp(p, nx, nz, speed) {
   // Mid-streak, only the combo popups show, so the screen doesn't drown in "+1"s
   const streaking = state.time - state.lastSmash < 1.5 && state.chaos >= 2;
   const label = K.pts ? `${K.text} ${K.pts > 0 ? '+' : ''}${K.pts}` : K.text;
-  if (!streaking || K.bad) popup(label, p.home, K.bad ? 'bad' : 'fun', 1);
+  if ((!streaking || K.bad) && !K.quiet) popup(label, p.home, K.bad ? 'bad' : 'fun', 1);
   if (K.sound === 'boing') audio.boing();
   else if (K.sound === 'clang') audio.clang();
   else if (K.sound === 'crunch') audio.crunch();
@@ -1382,7 +1488,7 @@ function knockProp(p, nx, nz, speed) {
 // ---------------------------------------------------------------------------
 function catBlocked(x, z) {
   for (const b of world.boxes) if (!b.off && x > b.minX - 0.5 && x < b.maxX + 0.5 && z > b.minZ - 0.5 && z < b.maxZ + 0.5) return true;
-  for (const s of world.circles) if (Math.hypot(x - s.x, z - s.z) < s.r + 0.5) return true;
+  for (const s of world.circles) if (!s.off && Math.hypot(x - s.x, z - s.z) < s.r + 0.5) return true;
   return Math.abs(x) > HALF + 3 || Math.abs(z) > HALF + 3;
 }
 
@@ -1725,7 +1831,7 @@ function updateGameplay(dt) {
   state.hunger = Math.max(0, state.hunger - dt * 1.45);
   state.hangry = state.hunger <= 0;
   if (state.hangry && !wasHangry) {
-    toast('😾 STEVE IS HANGRY. Steering is now more of a suggestion. Press E to snack!', 4);
+    toast(`😾 STEVE IS HANGRY. Steering is now more of a suggestion. ${document.body.classList.contains('touch') ? 'Tap his face' : 'Press E'} to snack!`, 4);
     audio.burp();
   }
 
@@ -2092,7 +2198,7 @@ function updateHud() {
   hud.hungerBar.style.backgroundPosition = `${-(100 - state.hunger) * 0}px 0`;
   hud.hungerText.textContent = state.hunger > 60 ? 'happy' : state.hunger > 25 ? 'peckish' : state.hunger > 0 ? 'HUNGRY' : 'HANGRY';
   const st = [];
-  if (state.hangry) st.push('😾 HANGRY! Press E');
+  if (state.hangry) st.push(document.body.classList.contains('touch') ? '😾 HANGRY! Tap Steve' : '😾 HANGRY! Press E');
   if (state.goldenHour) st.push('⭐ GOLDEN HOUR x2');
   if (state.boostT > 0) st.push('🔥 BOOST');
   else if (state.driftCharge > 0.6) st.push(['', '💙 boost ready', '🧡 SUPER boost', '💖 ULTRA boost'][boostLevel(state.driftCharge)]);
@@ -2245,12 +2351,13 @@ function updateBins(dt) {
     truck.group.worldToLocal(armTmp.copy(b.home));
     const lx = armTmp.x;
     const lz = armTmp.z;
-    if (lz < 3 || lz > 10 || Math.abs(lx) > 4) continue;
-    // Facing it squarely?
+    if (lz < 3 || lz > 11 || Math.abs(lx) > 5) continue;
+    // Roughly facing it? The forks are forgiving: the dumpster gets pulled
+    // into line as it's picked up.
     let dh = T.heading - (b.facing + Math.PI);
     while (dh > Math.PI) dh -= Math.PI * 2;
     while (dh < -Math.PI) dh += Math.PI * 2;
-    if (lz > 4.4 && lz < 8.6 && Math.abs(lx) < 1.4 && Math.abs(dh) < 0.5) {
+    if (lz > 3.8 && lz < 9.8 && Math.abs(lx) < 2.8 && Math.abs(dh) < 0.95) {
       startLift(b);
     } else if (!b.hinted && lz < 9) {
       b.hinted = true;
@@ -2265,7 +2372,12 @@ function startLift(b) {
   b.hinted = false;
   b.marker.group.visible = false;
   b.group.rotation.z = 0;
-  state.lift = { b, t: 0, attached: false, added: false, released: false, hold: true };
+  // Where the dumpster sits once squared up with the forks (truck-local x = 0)
+  truck.group.worldToLocal(armTmp.copy(b.home));
+  const aligned = truck.group.localToWorld(new THREE.Vector3(0, 0, Math.min(8.2, Math.max(4.6, armTmp.z))));
+  aligned.y = b.home.y;
+  b.collider.off = true;
+  state.lift = { b, t: 0, attached: false, added: false, released: false, hold: true, aligned, alignedRot: T.heading + Math.PI };
   audio.grab();
 }
 
@@ -2280,9 +2392,18 @@ function updateLift(dt) {
   L.t += dt;
   const t = L.t;
   const b = L.b;
-  const grab = binToLoader(b.home);
+  const grab = binToLoader(L.aligned);
+  const shortAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+  const slideBin = (k) => {
+    // drag the dumpster between its spot and the forks
+    b.group.position.lerpVectors(b.home, L.aligned, k);
+    b.group.rotation.set(0, b.facing + shortAngle(L.alignedRot - b.facing) * k, 0);
+  };
   let pose;
-  if (t < LTT.reach[1]) pose = lerpL(LREST, grab, ease(lphase(t, 'reach')));
+  if (t < LTT.reach[1]) {
+    pose = lerpL(LREST, grab, ease(lphase(t, 'reach')));
+    slideBin(ease(Math.max(0, (lphase(t, 'reach') - 0.5) * 2)));
+  }
   else if (t < LTT.grip[1]) pose = grab;
   else if (t < LTT.dump[1]) {
     if (!L.attached) {
@@ -2321,15 +2442,17 @@ function updateLift(dt) {
     if (!L.released) {
       L.released = true;
       scene.attach(b.group);
-      b.group.position.copy(b.home);
-      b.group.rotation.set(0, b.facing, 0);
       b.group.scale.set(1, 1, 1);
-      b.collider.off = false;
+      slideBin(1);
       b.state = 'idle';
       b.cooldown = 35;
     }
-  } else if (t < LTT.retract[1]) pose = lerpL(grab, LREST, ease(lphase(t, 'retract')));
-  else {
+  } else if (t < LTT.retract[1]) {
+    pose = lerpL(grab, LREST, ease(lphase(t, 'retract')));
+    slideBin(1 - ease(lphase(t, 'retract'))); // scoot it back where it belongs
+  } else {
+    slideBin(0);
+    b.collider.off = false;
     state.lift = null;
     pose = LREST;
   }
@@ -2642,6 +2765,7 @@ function updateBalls(dt) {
       }
     }
     for (const c of world.circles) {
+      if (c.off) continue;
       const ex = b.pos.x - c.x;
       const ez = b.pos.z - c.z;
       const e = Math.hypot(ex, ez);
@@ -2770,7 +2894,7 @@ const treasures = [];
   const dumpBlock = world.blocks.find((b) => b.type === 'dump');
   spots.push([dumpBlock.cx + 15, dumpBlock.cz - 15, LAWN_Y + 1.6]);
   const plaza = world.blocks.find((b) => b.type === 'plaza');
-  spots.push([plaza.cx, plaza.cz - 12, LAWN_Y + 1.6]);
+  spots.push([plaza.cx - 12, plaza.cz, LAWN_Y + 1.6]);
   // Tucked into a few backyards
   const yards = world.blocks.filter((b) => b.type === 'houses');
   for (const k of [3, 9, 15]) {
@@ -2871,13 +2995,14 @@ function endShift() {
     ['Cargo eaten "for quality control"', st.snacks],
     ['Longest airtime', `${st.air.toFixed(1)}s`],
     ['Property "rearranged"', st.smashed],
+    ['Trees felled', st.trees],
     ['Treasures hoarded', `${st.treasures}/${treasures.length}`],
     ['Double grabs', st.doubles],
     ['Boosts', st.boosts],
     ['Geese disrespected', st.geese],
     ['Citizens bounced', st.cats],
   ];
-  $('review').textContent = `${brendaSays(stars, st)} - Brenda (possum), Regional Manager`;
+  $('review').textContent = brendaSays(stars, st);
   $('resultTable').innerHTML = rows.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('');
   const isBest = s > getBest();
   if (isBest) localStorage.setItem(BEST_KEY, String(s));
@@ -2899,8 +3024,77 @@ function setPaused(p) {
 $('startBtn').addEventListener('click', startShift);
 $('againBtn').addEventListener('click', startShift);
 $('resumeBtn').addEventListener('click', () => setPaused(false));
+$('unstickBtn').addEventListener('click', () => {
+  setPaused(false);
+  unstick();
+});
+const syncMuteBtn = () => ($('muteBtn').textContent = audio.muted ? '🔇 Sound off' : '🔊 Sound on');
+$('muteBtn').addEventListener('click', () => {
+  audio.toggleMute();
+  syncMuteBtn();
+});
 window.addEventListener('blur', () => setPaused(true));
 document.addEventListener('visibilitychange', () => document.hidden && setPaused(true));
+
+// ---------------------------------------------------------------------------
+// Steve cam: a little live portrait of Steve's face in the HUD
+// ---------------------------------------------------------------------------
+const faceCam = new THREE.PerspectiveCamera(40, 1, 0.05, 60);
+const portraitEl = $('portrait');
+const _fp = new THREE.Vector3();
+const _fh = new THREE.Vector3();
+let lastMood = '';
+function renderPortrait() {
+  const r = portraitEl.getBoundingClientRect();
+  if (r.width < 10) return;
+  truck.body.updateMatrixWorld(true);
+  steve.head.getWorldPosition(_fh);
+  // In front of his face, a bit toward the middle of the cab, looking back at him
+  const h = T.heading;
+  const fx = Math.sin(h);
+  const fz = Math.cos(h);
+  // Just inside the windshield, a little above his eye line, nudged toward the middle
+  const side = 0.3 - Math.max(0, steveLean) * 3; // swing outside the doorway as he leans out
+  _fp.copy(_fh).add(tmpV2.set(fx * 1.75 + fz * side, 0.3, fz * 1.75 - fx * side));
+  faceCam.position.copy(_fp);
+  faceCam.lookAt(_fh.x, _fh.y - 0.02, _fh.z);
+  // hide what's between him and the camera (the loader arms, the steering wheel)
+  truck.loader.pivot.visible = false;
+  for (const m of truck.steeringWheel) m.visible = false;
+  faceCam.aspect = r.width / r.height;
+  faceCam.updateProjectionMatrix();
+  const y = window.innerHeight - r.bottom;
+  renderer.setScissorTest(true);
+  renderer.setScissor(r.left + 3, y + 3, r.width - 6, r.height - 6);
+  renderer.setViewport(r.left + 3, y + 3, r.width - 6, r.height - 6);
+  renderer.shadowMap.autoUpdate = false;
+  renderer.render(scene, faceCam);
+  truck.loader.pivot.visible = true;
+  for (const m of truck.steeringWheel) m.visible = true;
+  renderer.shadowMap.autoUpdate = true;
+  renderer.setScissorTest(false);
+  renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+
+  // Mood frame + label
+  let mood;
+  if (state.chompT > 0) mood = 'chomp';
+  else if (state.hangry) mood = 'hangry';
+  else if (state.hunger < 25) mood = 'hungry';
+  else if (state.boostT > 0 || state.zoomT > 0) mood = 'zoom';
+  else if (state.hicT > 0) mood = 'hic';
+  else mood = state.hunger > 60 ? 'happy' : 'peckish';
+  if (mood !== lastMood) {
+    lastMood = mood;
+    portraitEl.className = mood;
+    const M = {
+      chomp: ['😋', 'nom nom'], hangry: ['💢', 'HANGRY! feed me'], hungry: ['🍕?', 'hungry'],
+      zoom: ['⚡', 'zoomies'], hic: ['🫧', 'hic!'], happy: ['', 'happy'], peckish: ['', 'peckish'],
+    };
+    $('mood').textContent = M[mood][0];
+    $('moodText').textContent = M[mood][1];
+  }
+  $('portraitFill').style.width = `${state.hunger}%`;
+}
 
 // ---------------------------------------------------------------------------
 // Main loop
@@ -2920,6 +3114,7 @@ function frame() {
   // global keys
   if (pressed.has('mute')) {
     const m = audio.toggleMute();
+    syncMuteBtn();
     toast(m ? '🔇 Muted' : '🔊 Sound on', 1.5);
   }
   if (pressed.has('pause')) setPaused(state.mode === 'playing');
@@ -2964,6 +3159,7 @@ function frame() {
   audio.updateMusic(state.mode === 'playing');
   pressed.clear();
   renderer.render(scene, camera);
+  if (state.mode === 'playing' || state.mode === 'paused') renderPortrait();
 }
 frame();
 

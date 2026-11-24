@@ -206,68 +206,250 @@ body {
   white-space: nowrap;
 }
 
-/* ---------- Touch controls ---------- */
+/* ---------- Steve portrait (live camera on his face) ---------- */
 
-#touch {
+#portrait {
+  position: fixed;
+  left: 14px;
+  bottom: 46px;
+  width: 168px;
+  height: 150px;
+  padding: 0;
+  border: 3px solid #2b2d33;
+  border-radius: 16px;
+  box-shadow: 0 5px 0 #2b2d33;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  overflow: hidden;
+  transition: border-color 0.3s;
+}
+
+#moodText {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 2px 0 3px;
+  background: rgba(255, 252, 240, 0.9);
+  font-weight: 800;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #2b2d33;
+}
+
+#portraitBar {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 22px;
+  height: 7px;
+  border: 2px solid #2b2d33;
+  border-radius: 6px;
+  background: #e4dfd0;
+  overflow: hidden;
   display: none;
 }
 
-@media (pointer: coarse) {
-  #touch {
-    display: block;
+#portraitBar i {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #ff6b6b, #ffd23f, #7bd67a);
+}
+
+#mood {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 24px;
+  line-height: 1;
+}
+
+#portrait.hungry {
+  border-color: #e17055;
+}
+
+#portrait.hangry {
+  border-color: #e63946;
+  box-shadow: 0 5px 0 #e63946, 0 0 18px rgba(230, 57, 70, 0.7);
+  animation: shake 0.35s infinite;
+}
+
+#portrait.hangry #moodText {
+  background: #e63946;
+  color: #fff;
+}
+
+#portrait.chomp {
+  border-color: #7bd67a;
+}
+
+@keyframes shake {
+  25% {
+    transform: translate(-2px, 1px) rotate(-1deg);
   }
-  #hint {
-    display: none;
-  }
-  #stats {
-    transform: scale(0.8);
-    transform-origin: top left;
-  }
-  #minimap {
-    width: 120px;
-    height: 120px;
+  75% {
+    transform: translate(2px, -1px) rotate(1deg);
   }
 }
 
-.pad {
+/* ---------- Touch controls ---------- */
+
+#touch,
+#rotate {
+  display: none;
+}
+
+body.touch #touch {
+  display: block;
+}
+
+body.touch #hint {
+  display: none;
+}
+
+#stickZone {
   position: fixed;
-  bottom: 18px;
-  display: flex;
-  gap: 10px;
-  align-items: flex-end;
+  left: 0;
+  bottom: 0;
+  width: 46vw;
+  height: 72vh;
+  touch-action: none;
 }
 
-.pad.left {
-  left: 18px;
+#stick {
+  position: fixed;
+  width: 120px;
+  height: 120px;
+  margin: -60px 0 0 -60px;
+  border-radius: 50%;
+  border: 3px solid rgba(43, 45, 51, 0.6);
+  background: rgba(255, 252, 240, 0.3);
+  pointer-events: none;
+  display: none;
 }
 
-.pad.right {
-  right: 18px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  max-width: 230px;
+#stick.on {
+  display: block;
 }
 
-.pad button {
-  width: 76px;
-  height: 76px;
+#knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 54px;
+  height: 54px;
+  margin: -27px 0 0 -27px;
+  border-radius: 50%;
+  background: rgba(255, 252, 240, 0.9);
+  border: 3px solid #2b2d33;
+}
+
+.tbtn {
+  position: fixed;
   border-radius: 50%;
   border: 3px solid #2b2d33;
   background: rgba(255, 252, 240, 0.85);
-  font-size: 28px;
   box-shadow: 0 4px 0 #2b2d33;
+  font: inherit;
+  font-weight: 900;
+  touch-action: none;
 }
 
-.pad button.small {
-  width: 56px;
-  height: 56px;
-  font-size: 22px;
-}
-
-.pad button.on {
+.tbtn.on {
   transform: translateY(3px);
   box-shadow: 0 1px 0 #2b2d33;
   background: #ffd23f;
+}
+
+#btnDrift {
+  right: calc(18px + env(safe-area-inset-right));
+  bottom: 20px;
+  width: 96px;
+  height: 96px;
+  font-size: 16px;
+}
+
+#btnHonk {
+  right: calc(122px + env(safe-area-inset-right));
+  bottom: 22px;
+  width: 58px;
+  height: 58px;
+  font-size: 24px;
+}
+
+#btnPause {
+  right: calc(140px + env(safe-area-inset-right));
+  top: 12px;
+  width: 44px;
+  height: 44px;
+  font-size: 18px;
+}
+
+body.touch #portrait {
+  bottom: auto;
+}
+
+@media (orientation: portrait) {
+  body.touch #rotate {
+    display: flex;
+    z-index: 50;
+    background: #87cefa;
+  }
+}
+
+.pauseRow {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 14px;
+}
+
+button.mini {
+  font: inherit;
+  font-weight: 700;
+  font-size: 15px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 2px solid #2b2d33;
+  background: #fffcf0;
+  cursor: pointer;
+}
+
+#reviewBox {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  margin: 0 auto 14px;
+  max-width: 440px;
+}
+
+#brenda {
+  width: 72px;
+  height: 72px;
+  flex: none;
+  border: 3px solid #2b2d33;
+  border-radius: 50%;
+}
+
+#reviewBox p {
+  margin: 0;
+}
+
+#review {
+  font-style: italic;
+  color: #6b6f78;
+  font-size: 15px;
+}
+
+.reviewer {
+  font-weight: 800;
+  font-size: 13px;
+  color: #2b2d33;
+  margin-top: 4px !important;
 }
 
 /* ---------- Overlays ---------- */
@@ -417,10 +599,161 @@ p.small {
   }
 }
 
-#review {
-  font-style: italic;
-  color: #6b6f78;
-  font-size: 15px;
-  margin: 0 auto 16px;
-  max-width: 420px;
+
+
+@media (max-height: 860px) {
+  #resultTable {
+    font-size: 14px;
+    margin-bottom: 10px;
+  }
+  #resultTable td {
+    padding: 1px 10px;
+  }
+  #stars {
+    font-size: 40px;
+  }
+  #results h2 {
+    margin-bottom: 0;
+  }
+}
+
+/* ---------- Small / short screens (phones in landscape) ---------- */
+
+@media (max-height: 540px), (max-width: 760px) {
+  #stats {
+    top: 8px;
+    left: calc(8px + env(safe-area-inset-left));
+    width: auto;
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    padding: 6px 12px;
+    border-width: 2px;
+    box-shadow: 0 3px 0 #2b2d33;
+    border-radius: 12px;
+  }
+  #stats .stat {
+    flex-direction: column;
+    align-items: flex-start;
+    margin: 0;
+  }
+  #stats .stat span:last-child {
+    font-size: 19px;
+  }
+  .label {
+    font-size: 10px;
+  }
+  #stats .meter {
+    margin: 0;
+    width: 90px;
+  }
+  #tummyMeter,
+  #status {
+    display: none;
+  }
+  .bar {
+    height: 10px;
+  }
+  #minimap {
+    top: 8px;
+    right: calc(8px + env(safe-area-inset-right));
+    width: 108px;
+    height: 108px;
+    border-width: 2px;
+    border-radius: 12px;
+    box-shadow: 0 3px 0 #2b2d33;
+  }
+  #portrait {
+    left: calc(8px + env(safe-area-inset-left));
+    top: 66px;
+    bottom: auto;
+    width: 104px;
+    height: 96px;
+    border-width: 2px;
+    border-radius: 12px;
+    box-shadow: 0 3px 0 #2b2d33;
+  }
+  #portraitBar {
+    display: block;
+  }
+  #moodText {
+    font-size: 10px;
+  }
+  #mood {
+    font-size: 18px;
+  }
+  #toast {
+    top: 10px;
+    max-width: 44vw;
+  }
+  .toast-msg {
+    font-size: 12px;
+    padding: 5px 10px;
+  }
+  .popup {
+    font-size: 18px;
+  }
+  .popup.gold {
+    font-size: 22px;
+  }
+  #hint {
+    display: none;
+  }
+  .card {
+    padding: 12px 20px;
+    border-radius: 18px;
+  }
+  .logo {
+    display: none;
+  }
+  h1 {
+    font-size: 32px;
+  }
+  h2 {
+    font-size: 26px;
+  }
+  .tagline {
+    margin: 2px 0;
+    font-size: 13px;
+  }
+  .howto {
+    font-size: 12px;
+    line-height: 1.35;
+    margin: 6px 0 10px;
+  }
+  button.big {
+    font-size: 18px;
+    padding: 8px 26px;
+  }
+  #stars {
+    font-size: 34px;
+  }
+  #rank {
+    font-size: 17px;
+    margin: 0 0 6px;
+  }
+  #resultTable {
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+  #resultTable td {
+    padding: 1px 8px;
+  }
+  #brenda {
+    width: 52px;
+    height: 52px;
+  }
+  #review {
+    font-size: 12px;
+  }
+}
+
+
+body.touch .keysOnly,
+.touchOnly {
+  display: none;
+}
+
+body.touch .touchOnly {
+  display: block;
 }

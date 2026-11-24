@@ -614,6 +614,7 @@ export function makeTruck() {
   const column = cyl(0.05, 0.05, 0.4, DARK, -0.75, 2.4, cabZ + 0.62, 6);
   column.rotation.x = 0.6;
   body.add(column);
+  const steeringWheel = [wheel, column];
 
   // A tiny air freshener shaped like a pine tree (ironic)
   body.add(cone(0.08, 0.2, 0x2ecc71, 0.3, 2.95, cabZ + 0.75, 6));
@@ -651,7 +652,7 @@ export function makeTruck() {
   const hopperLocal = new THREE.Vector3(0, 3.4, HOP_Z); // mouth of the open hopper
   const rearLocal = new THREE.Vector3(0, 2.5, -4.2); // rear door, for unloading
 
-  return { group, body, wheels, frontWheels, arms, loader, beacon, beaconMat, steve, hopperLocal, rearLocal, fill, lampMat };
+  return { group, body, wheels, frontWheels, arms, loader, steeringWheel, beacon, beaconMat, steve, hopperLocal, rearLocal, fill, lampMat };
 }
 
 // ---------------------------------------------------------------------------

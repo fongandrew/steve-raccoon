@@ -2,7 +2,8 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
     <title>Steve Raccoon</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦝</text></svg>" />
     <link rel="stylesheet" href="./src/style.css" />
@@ -18,7 +19,7 @@
           <span class="label">🗑️ Load <b id="loadText">0/12</b></span>
           <div class="bar"><div id="loadBar" class="fill load"></div></div>
         </div>
-        <div class="meter">
+        <div class="meter" id="tummyMeter">
           <span class="label">🍕 Tummy <b id="hungerText"></b></span>
           <div class="bar"><div id="hungerBar" class="fill hunger"></div></div>
         </div>
@@ -28,27 +29,28 @@
       <div id="toast"></div>
       <div id="popups"></div>
       <div id="hint">WASD / Arrows: drive · Space: drift (release to boost) · E: snack · H: honk · R: unstick · P: pause · M: mute</div>
+      <button id="portrait" title="Steve (click or tap to snack)">
+        <span id="mood" aria-hidden="true"></span>
+        <span id="portraitBar"><i id="portraitFill"></i></span>
+        <span id="moodText">happy</span>
+      </button>
       <div id="touch">
-        <div class="pad left">
-          <button data-key="left">◀</button>
-          <button data-key="right">▶</button>
-        </div>
-        <div class="pad right">
-          <button data-key="snack" class="small">🍕</button>
-          <button data-key="honk" class="small">📯</button>
-          <button data-key="drift" class="small">💨</button>
-          <button data-key="brake">⏪</button>
-          <button data-key="gas">⏩</button>
-        </div>
+        <div id="stickZone"></div>
+        <div id="stick"><div id="knob"></div></div>
+        <button id="btnPause" class="tbtn small" data-key="pause">II</button>
+        <button id="btnHonk" class="tbtn small" data-key="honk">📯</button>
+        <button id="btnDrift" class="tbtn" data-key="drift">DRIFT</button>
       </div>
     </div>
+
+    <div id="rotate" class="overlay"><div class="card"><div class="logo">📱↻</div><h2>Turn sideways</h2><p>Steve needs the whole windshield.</p></div></div>
 
     <div id="title" class="overlay">
       <div class="card">
         <div class="logo">🦝</div>
         <h1>Steve Raccoon</h1>
         <p class="tagline">It's a lovely day and you're a raccoon driving a trash truck.</p>
-        <ul class="howto">
+        <ul class="howto keysOnly">
           <li><b>Stop near</b> a glowing trash can and a claw grabs it. Stop between cans on both sides for a <b>double grab</b>!</li>
           <li>Haul full loads to <b>The Dump</b> to cash in. Full loads pay extra!</li>
           <li>Hold <kbd>Space</kbd> while turning to <b>drift</b>. Let go to <b>BOOST</b>. Longer drift, bigger boost.</li>
@@ -56,6 +58,12 @@
           <li>Find Steve's 10 lost <b>treasures</b> (follow the beams of light). Some need a <b>jump</b>.</li>
           <li>Geese do not move. Ever. Plan accordingly.</li>
           <li>Smash fences, flamingos, gnomes and light poles for <b>CHAOS</b> combos. But please don't bonk the cats or mailboxes (<kbd>H</kbd> honks cats out of the way).</li>
+        </ul>
+        <ul class="howto touchOnly">
+          <li><b>Left thumb:</b> drag anywhere to drive and steer. Pull back to reverse.</li>
+          <li><b>Right thumb:</b> hold <b>DRIFT</b> through a turn, let go to <b>BOOST</b>. 📯 honks.</li>
+          <li>Stop near glowing cans and the claws grab them. Line up with dumpsters to front-load.</li>
+          <li><b>Tap Steve's face</b> to snack when he gets hungry. Geese do not move. Ever.</li>
         </ul>
         <button id="startBtn" class="big">Start Shift</button>
         <p id="best" class="small"></p>
@@ -67,6 +75,10 @@
         <h2>Coffee Break ☕</h2>
         <p>Steve is staring at a pigeon.</p>
         <button id="resumeBtn" class="big">Back to Work</button>
+        <div class="pauseRow">
+          <button id="unstickBtn" class="mini">🪝 Unstick truck</button>
+          <button id="muteBtn" class="mini">🔊 Sound on</button>
+        </div>
       </div>
     </div>
 
@@ -76,7 +88,32 @@
         <div id="stars"></div>
         <p id="rank"></p>
         <table id="resultTable"></table>
-        <p id="review"></p>
+        <div id="reviewBox">
+          <svg id="brenda" viewBox="0 0 100 100" aria-label="Brenda, a possum in glasses">
+            <circle cx="50" cy="50" r="48" fill="#e8dcc0" />
+            <path d="M14 100 Q50 66 86 100 Z" fill="#3d7ea6" />
+            <path d="M44 74 L50 92 L56 74 Z" fill="#d9534f" />
+            <ellipse cx="22" cy="28" rx="10" ry="12" fill="#2b2d33" />
+            <ellipse cx="78" cy="28" rx="10" ry="12" fill="#2b2d33" />
+            <ellipse cx="22" cy="29" rx="5" ry="6" fill="#ff9fb5" />
+            <ellipse cx="78" cy="29" rx="5" ry="6" fill="#ff9fb5" />
+            <ellipse cx="50" cy="46" rx="30" ry="27" fill="#a8a8b0" />
+            <path d="M28 40 Q50 30 72 40 L56 76 Q50 82 44 76 Z" fill="#fafaf6" />
+            <ellipse cx="50" cy="76" rx="5" ry="4" fill="#ff7f9e" />
+            <circle cx="39" cy="48" r="4" fill="#1b1b22" />
+            <circle cx="61" cy="48" r="4" fill="#1b1b22" />
+            <circle cx="40.5" cy="46.5" r="1.3" fill="#fff" />
+            <circle cx="62.5" cy="46.5" r="1.3" fill="#fff" />
+            <circle cx="39" cy="48" r="8.5" fill="none" stroke="#2b2d33" stroke-width="2.4" />
+            <circle cx="61" cy="48" r="8.5" fill="none" stroke="#2b2d33" stroke-width="2.4" />
+            <line x1="47.5" y1="48" x2="52.5" y2="48" stroke="#2b2d33" stroke-width="2.4" />
+            <rect x="57" y="84" width="16" height="11" rx="2" fill="#fffbe8" stroke="#2b2d33" stroke-width="1.2" />
+          </svg>
+          <div>
+            <p id="review"></p>
+            <p class="reviewer">Brenda, Regional Manager</p>
+          </div>
+        </div>
         <p id="newBest" class="hidden">✨ New personal best! ✨</p>
         <button id="againBtn" class="big">Another Shift</button>
       </div>

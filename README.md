@@ -22,7 +22,7 @@ You have one four-minute shift (the countdown is top-left; the sun sets as it ru
   has a claw on each side: stop between cans on both sides of the street for a **double grab**.
   Grabbing cans back to back builds a **streak** bonus.
 - **Dumpsters:** a few overflowing dumpsters (orange on the minimap) wait at the curb. Line up
-  head-on and the truck's front loader hoists them over the cab into the hopper for 6 bags at once.
+  roughly head-on (the forks are forgiving) and the truck's front loader hoists them over the cab into the hopper for 6 bags at once.
 - **Dump it:** the truck holds 12 bags (you can see the pile in the open hopper). Each bag you
   unload arcs onto the trash mountain, which grows over the shift. Unload on the
   yellow pad at **The Dump** (orange dot on the minimap). Each bag is worth 10 points, and a
@@ -45,6 +45,9 @@ You have one four-minute shift (the countdown is top-left; the sun sets as it ru
 - **Citizens:** kittens, puppies, bunnies, hedgehogs, squirrels and the firehouse dalmatian go
   about their day and try to get out of Steve's way. Bounce one and it costs a few points.
   Honk (**H**) to make them jump. Mailboxes and hydrants also cost points.
+- **Trees:** hit one hard, or a few times, and it comes down. TIMBERRRRR!
+- **Steve cam:** a live view of Steve's face sits in the corner. When he turns red and shaky,
+  he's hangry: feed him (or click/tap his face).
 - **Around town:** the Rusty Lid bar, Binsville Elementary, Fire Station 9, a community garden
   (whose vegetables are very much in harm's way), parks, the plaza and The Dump.
 
@@ -58,7 +61,9 @@ You have one four-minute shift (the countdown is top-left; the sun sets as it ru
 | P / Esc | Pause |
 | M | Mute |
 
-On touchscreens, on-screen buttons appear instead.
+On phones and tablets (landscape): drag anywhere on the left half to drive and steer (pull back
+to reverse), hold **DRIFT** on the right to drift and release to boost, 📯 honks, tap Steve's
+face to snack, and the pause button has unstick and sound options.
 
 ## Code layout
 
