@@ -1,3 +1,4 @@
+// Dumpsters around town and the front loader that lifts them over the cab.
 import * as THREE from '../vendor/three.module.js';
 import { audio } from './audio.js';
 import { CAPACITY, DUMPSTER_BAGS, TRASH_COLORS } from './constants.js';
@@ -7,13 +8,26 @@ import { scene, truck, world } from './scene.js';
 import { addScore, state, T } from './state.js';
 import { ease, timeline } from './util.js';
 
+/** @typedef {import('./world.js').Bin} Bin */
+
+/**
+ * Where the front loader is in its swing.
+ * @typedef {object} LoaderPose
+ * @property {number} r arm rotation about the pivot (more negative = further up and over the cab)
+ * @property {number} L how far the forks sit along the arms
+ * @property {number} tilt fork tilt, relative to the truck
+ */
+
 const armTmp = new THREE.Vector3();
 
 const LOADER = truck.loader;
+/** @type {LoaderPose} */
 const LREST = { r: -0.14, L: 2.3, tilt: -0.05 }; // tucked over the cab, forks folded up
+/** @type {LoaderPose} */
 const LTOP = { r: -1.78, L: 4.4, tilt: -2.4 };
 const loaderPose = { ...LREST };
 
+/** @param {LoaderPose} p */
 function applyLoader(p) {
 	LOADER.pivot.rotation.x = p.r;
 	for (const s of LOADER.sliders) s.scale.z = Math.max(0.01, p.L - LOADER.sliderStart);
@@ -22,13 +36,23 @@ function applyLoader(p) {
 }
 applyLoader(loaderPose);
 
+/**
+ * @param {LoaderPose} a
+ * @param {LoaderPose} b
+ * @param {number} k 0 = a, 1 = b
+ * @returns {LoaderPose}
+ */
 const lerpL = (a, b, k) => ({
 	r: a.r + (b.r - a.r) * k,
 	L: a.L + (b.L - a.L) * k,
 	tilt: a.tilt + (b.tilt - a.tilt) * k,
 });
 
-/** Loader pose that puts the forks into the sleeves of a dumpster at world point p. */
+/**
+ * Loader pose that puts the forks into the sleeves of a dumpster at world point p.
+ * @param {THREE.Vector3} p
+ * @returns {LoaderPose}
+ */
 function binToLoader(p) {
 	truck.body.worldToLocal(armTmp.copy(p));
 	armTmp.y += 0.95;
@@ -41,6 +65,12 @@ function binToLoader(p) {
 		tilt: 0,
 	};
 }
+/**
+ * Pose for 0..1 along the swing from `from` up over the cab; the forks tip late.
+ * @param {LoaderPose} from
+ * @param {number} k
+ * @returns {LoaderPose}
+ */
 const loaderSwing = (from, k) => ({
 	r: from.r + (LTOP.r - from.r) * k,
 	L: from.L + (LTOP.L - from.L) * k,
@@ -73,14 +103,16 @@ export function resetBins() {
 	}
 	state.binSpawnT = 0;
 	// one is waiting right from the start
-	setBinFull(world.bins[(Math.random() * world.bins.length) | 0]);
+	setBinFull(/** @type {Bin} */ (world.bins[(Math.random() * world.bins.length) | 0]));
 }
 
+/** @param {Bin} b */
 function setBinFull(b) {
 	b.state = 'out';
 	b.marker.group.visible = true;
 }
 
+/** @param {number} dt */
 export function updateBins(dt) {
 	// Keep a couple of full dumpsters around town
 	state.binSpawnT -= dt;
@@ -94,7 +126,7 @@ export function updateBins(dt) {
 				Math.hypot(b.x - T.pos.x, b.z - T.pos.z) > 40,
 		);
 		if (out < 2 && idle.length) {
-			setBinFull(idle[(Math.random() * idle.length) | 0]);
+			setBinFull(/** @type {Bin} */ (idle[(Math.random() * idle.length) | 0]));
 			if (state.mode === 'playing')
 				toast('🗑️ A dumpster somewhere is overflowing. Steve can feel it.', 3);
 		}
@@ -127,6 +159,7 @@ export function updateBins(dt) {
 	updateLift(dt);
 }
 
+/** @param {Bin} b */
 function startLift(b) {
 	b.state = 'lifting';
 	b.hinted = false;
@@ -152,6 +185,7 @@ function startLift(b) {
 	audio.grab();
 }
 
+/** @param {number} dt */
 function updateLift(dt) {
 	const L = state.lift;
 	if (!L) {
@@ -164,12 +198,15 @@ function updateLift(dt) {
 	const t = L.t;
 	const b = L.b;
 	const grab = binToLoader(L.aligned);
+	/** @param {number} a */
 	const shortAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+	/** @param {number} k 0 = on its spot, 1 = on the forks */
 	const slideBin = (k) => {
 		// drag the dumpster between its spot and the forks
 		b.group.position.lerpVectors(b.home, L.aligned, k);
 		b.group.rotation.set(0, b.facing + shortAngle(L.alignedRot - b.facing) * k, 0);
 	};
+	/** @type {LoaderPose} */
 	let pose;
 	if (t < LIFT.end.reach) {
 		pose = lerpL(LREST, grab, ease(LIFT.phase(t, 'reach')));
@@ -197,7 +234,9 @@ function updateLift(dt) {
 						-6,
 						(Math.random() - 0.5) * 1.5,
 					),
-					color: TRASH_COLORS[(Math.random() * TRASH_COLORS.length) | 0],
+					color: /** @type {number} */ (
+						TRASH_COLORS[(Math.random() * TRASH_COLORS.length) | 0]
+					),
 					size: 0.3 + Math.random() * 0.2,
 					life: 0.6,
 					grav: 20,

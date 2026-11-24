@@ -1,3 +1,4 @@
+// Driving physics for the truck: steering, drifting, jumps and collisions with the town.
 import * as THREE from '../vendor/three.module.js';
 import { audio } from './audio.js';
 import { GRAVITY, MAX_SPEED } from './constants.js';
@@ -14,6 +15,7 @@ const tmpV2 = new THREE.Vector3();
 
 const prevPos = new THREE.Vector3();
 
+/** @param {number} dt */
 export function updateTruck(dt) {
 	const playing = state.mode === 'playing';
 	// Thumbstick: push any way but down to drive (steering by its sideways
@@ -226,7 +228,7 @@ function releaseBoost() {
 	if (!level) return;
 	state.boostT = 0.5 + level * 0.45;
 	state.stats.boosts++;
-	const pts = [0, 5, 10, 20][level];
+	const pts = /** @type {number} */ ([0, 5, 10, 20][level]);
 	addScore(pts);
 	audio.boost(level);
 	state.shake = Math.max(state.shake, 0.25 + level * 0.1);
@@ -241,6 +243,15 @@ function releaseBoost() {
 	T.vel.z += Math.cos(T.heading) * 4 * level;
 }
 
+/**
+ * Push the truck (and its collision circle `c`) out along a contact normal and
+ * bounce off it.
+ * @param {THREE.Vector3} c
+ * @param {number} nx
+ * @param {number} nz
+ * @param {number} pen penetration depth
+ * @returns {number} speed into the surface before the bounce, 0 if moving away
+ */
 function resolve(c, nx, nz, pen) {
 	T.pos.x += nx * pen;
 	T.pos.z += nz * pen;
@@ -255,6 +266,7 @@ function resolve(c, nx, nz, pen) {
 	return 0;
 }
 
+/** @param {number} strength impact speed */
 export function bonk(strength) {
 	if (state.time - state.lastBonk < 0.4) return;
 	state.lastBonk = state.time;
@@ -273,6 +285,7 @@ export function bonk(strength) {
 
 export function unstick() {
 	// Snap onto the nearest road
+	/** @param {number} v */
 	const snap = (v) => roadCenter(Math.round((v + HALF) / PITCH));
 	const sx = snap(T.pos.x);
 	const sz = snap(T.pos.z);

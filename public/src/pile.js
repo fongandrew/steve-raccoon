@@ -1,3 +1,4 @@
+// The trash mountain at the dump: bags fly in from the truck and settle into instanced piles.
 import * as THREE from '../vendor/three.module.js';
 import { TRASH_COLORS } from './constants.js';
 import { makeTrashBag, toon } from './models.js';
@@ -5,18 +6,29 @@ import { burst } from './particles.js';
 import { PropBatch } from './props.js';
 import { scene, world } from './scene.js';
 
+/**
+ * A bag in the air between the truck and the pile. Pooled: `active` is false
+ * while it waits for reuse.
+ * @typedef {object} FlyingBag
+ * @property {THREE.Group} mesh
+ * @property {boolean} active
+ * @property {number} t 0..1 along the arc
+ * @property {THREE.Vector3} from
+ * @property {THREE.Vector3} to
+ * @property {PropBatch} batch the pile batch it joins when it lands
+ */
+
 const PILE_MAX = 220;
 const pileBatches = [0x2b2b2b, 0x3d7ea6, 0x40704a].map((c) => {
 	const t = makeTrashBag(() => 0);
-	t.traverse(
-		(m) =>
-			m.isMesh &&
-			m.material.color &&
-			m.material.color.getHex() === 0x2b2b2b &&
-			(m.material = toon(c)),
-	);
+	t.traverse((obj) => {
+		const m = /** @type {THREE.Mesh<THREE.BufferGeometry, THREE.MeshToonMaterial>} */ (obj);
+		if (m.isMesh && m.material.color && m.material.color.getHex() === 0x2b2b2b)
+			m.material = toon(c);
+	});
 	return new PropBatch(scene, t, PILE_MAX);
 });
+/** @type {FlyingBag[]} */
 const flyingBags = [];
 let pileCount = 0;
 const _bm = new THREE.Matrix4();
@@ -32,23 +44,26 @@ function pileSpot() {
 	return new THREE.Vector3(D.pileX + Math.cos(a) * r, y, D.pileZ + Math.sin(a) * r);
 }
 
+/** @param {THREE.Vector3} from where the bag leaves the truck */
 export function launchBagToPile(from) {
 	let f = flyingBags.find((b) => !b.active);
 	if (!f) {
 		const mesh = makeTrashBag(Math.random);
 		scene.add(mesh);
-		f = { mesh };
+		// the rest is filled in just below
+		f = /** @type {FlyingBag} */ ({ mesh });
 		flyingBags.push(f);
 	}
 	f.active = true;
 	f.t = 0;
 	f.from = from.clone();
 	f.to = pileSpot();
-	f.batch = pileBatches[(Math.random() * pileBatches.length) | 0];
+	f.batch = /** @type {PropBatch} */ (pileBatches[(Math.random() * pileBatches.length) | 0]);
 	f.mesh.visible = true;
 	f.mesh.position.copy(from);
 }
 
+/** @param {number} dt */
 export function updatePile(dt) {
 	for (const f of flyingBags) {
 		if (!f.active) continue;

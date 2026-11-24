@@ -1,3 +1,4 @@
+// Curbside cans and the two side grabber arms that empty them into the hopper.
 import * as THREE from '../vendor/three.module.js';
 import { audio } from './audio.js';
 import { CAPACITY, TRASH_COLORS } from './constants.js';
@@ -8,6 +9,17 @@ import { addScore, state, T } from './state.js';
 import { cap, ease, timeline } from './util.js';
 import { WALK_Y } from './world.js';
 
+/** @typedef {import('./models.js').ArmModel} ArmModel */
+/** @typedef {import('./models.js').ArmPose} ArmPose */
+/** @typedef {import('./state.js').Grab} Grab */
+/** @typedef {import('./world.js').House} House */
+
+/**
+ * An arm pose without the fingers: what the grab timeline animates.
+ * @typedef {Omit<ArmPose, 'close'>} BoomPose
+ */
+
+/** @param {boolean} [silent] skip the toast (cans put out as a shift starts) */
 export function spawnCan(silent = false) {
 	const candidates = world.houses.filter(
 		(h) =>
@@ -16,7 +28,7 @@ export function spawnCan(silent = false) {
 			Math.hypot(h.canX - T.pos.x, h.canZ - T.pos.z) > 30,
 	);
 	if (!candidates.length) return;
-	const h = candidates[(Math.random() * candidates.length) | 0];
+	const h = /** @type {House} */ (candidates[(Math.random() * candidates.length) | 0]);
 	h.state = 'out';
 	h.golden = false; // golden cans retired; the big prizes are dumpsters now
 	const can = h.golden ? h.goldCan : h.can;
@@ -31,6 +43,10 @@ export function spawnCan(silent = false) {
 	}
 }
 
+/**
+ * @param {House} h
+ * @returns {import('./models.js').CanModel} the can this house has out
+ */
 export function canFor(h) {
 	return h.golden ? h.goldCan : h.can;
 }
@@ -45,11 +61,17 @@ export const ARMS = truck.arms;
 const ARM = ARMS[0]; // shared dimensions
 const LIFT_MAX = (210 * Math.PI) / 180;
 const DUMP_TILT = (-150 * Math.PI) / 180;
+/** @type {BoomPose} */
 const REST = { ext: 0, yaw: 0, lift: 0, tilt: 0 };
 for (const a of ARMS) a.pose = { ...REST, close: 0 };
 const armTmp = new THREE.Vector3();
 
-/** Boom extension + yaw needed to hold a can whose base is at world point p. */
+/**
+ * Boom extension + yaw needed to hold a can whose base is at world point p.
+ * @param {ArmModel} arm
+ * @param {THREE.Vector3} p
+ * @returns {{ ext: number, yaw: number, side: number }} `side` > 0 when p is on the arm's side
+ */
 export function canToArm(arm, p) {
 	arm.base.worldToLocal(armTmp.copy(p));
 	// undo the base's own yaw so we get the yaw needed to face the can
@@ -61,6 +83,10 @@ export function canToArm(arm, p) {
 	return { ext: horiz - ARM.GRIP, yaw: Math.atan2(z, -x), side: -x };
 }
 
+/**
+ * @param {ArmModel} arm
+ * @param {ArmPose} pose
+ */
 function applyArm(arm, pose) {
 	const ext = Math.max(0, Math.min(arm.MAX_EXT, pose.ext));
 	arm.base.rotation.y = pose.yaw;
@@ -71,19 +97,33 @@ function applyArm(arm, pose) {
 	for (const f of arm.fingers) f.rotation.y = f.userData.side * (0.55 - pose.close * 0.62);
 }
 
+/**
+ * @param {BoomPose} a
+ * @param {BoomPose} b
+ * @param {number} k 0 = a, 1 = b
+ * @returns {BoomPose}
+ */
 const lerpPose = (a, b, k) => ({
 	ext: a.ext + (b.ext - a.ext) * k,
 	yaw: a.yaw + (b.yaw - a.yaw) * k,
 	lift: a.lift + (b.lift - a.lift) * k,
 	tilt: a.tilt + (b.tilt - a.tilt) * k,
 });
-/** Lift pose for 0..1 along the swing; the can stays upright until it clears the rim. */
+/**
+ * Lift pose for 0..1 along the swing; the can stays upright until it clears the rim.
+ * @param {number} k
+ * @returns {BoomPose}
+ */
 const swing = (k) => {
 	const lift = LIFT_MAX * k;
 	const tip = Math.max(0, Math.min(1, (k - 0.6) / 0.4));
 	return { ext: 0, yaw: 0, lift, tilt: DUMP_TILT * ease(tip) };
 };
 
+/**
+ * @param {House} h
+ * @param {ArmModel} arm
+ */
 export function startGrab(h, arm) {
 	h.state = 'grabbing';
 	h.marker.group.visible = false;
@@ -91,6 +131,7 @@ export function startGrab(h, arm) {
 	const can = canFor(h);
 	can.group.position.y = WALK_Y; // stop fidgeting, you're being picked up
 	can.group.rotation.z = 0;
+	/** @type {Grab} */
 	const g = {
 		h,
 		arm,
@@ -128,6 +169,7 @@ const GRAB = timeline({
 });
 for (const a of ARMS) applyArm(a, a.pose);
 
+/** @param {number} dt */
 export function updateGrabs(dt) {
 	truck.body.updateMatrixWorld(true);
 	for (const arm of ARMS) {
@@ -140,6 +182,10 @@ export function updateGrabs(dt) {
 	for (const g of [...state.grabs]) updateGrab(g, dt);
 }
 
+/**
+ * @param {Grab} g
+ * @param {number} dt
+ */
 function updateGrab(g, dt) {
 	const arm = g.arm;
 	g.t += dt;
@@ -147,6 +193,7 @@ function updateGrab(g, dt) {
 	const can = canFor(g.h);
 	const grabPose = { ...canToArm(arm, g.home), lift: 0, tilt: 0 };
 	const carry = { ...REST };
+	/** @type {BoomPose} */
 	let pose;
 	let close = 0;
 	if (t < GRAB.end.reach) {
@@ -177,7 +224,9 @@ function updateGrab(g, dt) {
 						-3,
 						(Math.random() - 0.5) * 1.5,
 					),
-					color: TRASH_COLORS[(Math.random() * TRASH_COLORS.length) | 0],
+					color: /** @type {number} */ (
+						TRASH_COLORS[(Math.random() * TRASH_COLORS.length) | 0]
+					),
 					size: 0.22 + Math.random() * 0.15,
 					life: 0.35,
 					grav: 20,
@@ -220,6 +269,7 @@ function updateGrab(g, dt) {
 	applyArm(arm, arm.pose);
 }
 
+/** @param {House} h */
 function collectBags(h) {
 	const n = h.golden ? 5 : 1 + ((Math.random() * 3) | 0);
 	const got = Math.min(n, CAPACITY - state.load);

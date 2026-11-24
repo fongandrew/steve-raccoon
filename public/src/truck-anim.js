@@ -1,3 +1,4 @@
+// Truck and Steve animation: everything visual that follows from the physics state.
 import * as THREE from '../vendor/three.module.js';
 import { BOOST_COLORS, CAPACITY } from './constants.js';
 import { keys } from './input.js';
@@ -15,6 +16,10 @@ let blinkT = 2;
 export const steveAnim = { lean: 0 };
 let duckAmt = 0;
 
+/**
+ * @param {number} dt
+ * @param {number} time seconds, for the idle wobbles
+ */
 export function animateTruck(dt, time) {
 	// Spring squash
 	T.squashV += (-90 * T.squash - 9 * T.squashV) * dt;
@@ -86,7 +91,7 @@ export function animateTruck(dt, time) {
 						2 + Math.random() * 3,
 						(Math.random() - 0.5) * 4,
 					),
-					color: BOOST_COLORS[lvl],
+					color: /** @type {number} */ (BOOST_COLORS[lvl]),
 					size: 0.14 + lvl * 0.04,
 					life: 0.35,
 					grav: 14,
@@ -193,7 +198,9 @@ export function animateTruck(dt, time) {
 	// Tail wags, faster at speed
 	const sp = Math.abs(T.fwd);
 	steve.tail.forEach((seg, i) => {
-		const rest = steve.tailRest ? steve.tailRest[i] : { x: i < 4 ? -0.12 : 0.22, y: 0 };
+		const rest = steve.tailRest
+			? /** @type {{ x: number, y: number }} */ (steve.tailRest[i])
+			: { x: i < 4 ? -0.12 : 0.22, y: 0 };
 		const wag = steve.tailWag ?? 0.18 + sp * 0.006;
 		seg.rotation.y = rest.y + Math.sin(time * 2.2 - i * 0.6) * wag;
 		seg.rotation.x = rest.x + Math.sin(time * 1.7 - i * 0.5) * wag * 0.4;

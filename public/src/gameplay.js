@@ -1,3 +1,4 @@
+// Per-frame shift rules: actions, can pickups, unloading at the dump, hunger and snacks.
 import * as THREE from '../vendor/three.module.js';
 import { audio } from './audio.js';
 import { ARMS, canFor, canToArm, spawnCan, startGrab, updateGrabs } from './cans.js';
@@ -17,6 +18,7 @@ import { WALK_Y } from './world.js';
 
 const tmpV = new THREE.Vector3();
 
+/** @param {number} dt */
 export function updateGameplay(dt) {
 	state.time += dt;
 	const pos = truck.group.position;
@@ -233,7 +235,7 @@ function snack() {
 	state.snackCd = 1.2;
 	state.load--;
 	state.stats.snacks++;
-	const s = SNACKS[(Math.random() * SNACKS.length) | 0];
+	const s = /** @type {(typeof SNACKS)[number]} */ (SNACKS[(Math.random() * SNACKS.length) | 0]);
 	state.hunger = Math.min(100, state.hunger + s.h);
 	state.chompT = 1;
 	audio.chomp();
