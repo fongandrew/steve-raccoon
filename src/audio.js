@@ -157,6 +157,17 @@ export class Audio {
   beep() {
     this.tone(1000, 0.12, { type: 'square', vol: 0.05 });
   }
+  chargeUp(level) {
+    this.tone(500 + level * 250, 0.12, { type: 'triangle', vol: 0.12, slide: 300 });
+  }
+  boost(level) {
+    this.noise(0.6, { vol: 0.3, freq: 900, q: 0.7, type: 'bandpass' });
+    this.tone(180, 0.5, { type: 'sawtooth', vol: 0.12, slide: 400 + level * 200 });
+  }
+  treasure() {
+    [659, 880, 1109, 1319, 1760].forEach((f, i) => this.tone(f, 0.22, { type: 'triangle', vol: 0.13, delay: i * 0.07 }));
+    this.tone(2637, 0.5, { type: 'sine', vol: 0.06, delay: 0.38 });
+  }
   fanfare() {
     [523, 659, 784, 1047, 784, 1047].forEach((f, i) => this.tone(f, 0.2, { type: 'square', vol: 0.1, delay: i * 0.14 }));
   }

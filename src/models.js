@@ -291,45 +291,47 @@ export function makeTruck() {
     body.add(box(0.35, 0.08, 0.6, CHROME, sx * 1.1, 0.85, 1.35));
   }
 
-  // --- Cab: open doorway on the driver's side (right, -x, same side as the arm), like a side-loader ---
+  // --- Cab: open doorways on both sides, like a side-loader. Steve drives
+  // from the right (-x); the passenger seat is taken by a pizza box.
   const cabZ = 2.45;
   const INTERIOR = 0x3a3d45;
   body.add(box(2.7, 0.12, 1.9, INTERIOR, 0, 1.21, cabZ)); // cab floor
-  body.add(box(1.45, 1.0, 1.9, TRUCK_WHITE, 0.625, 1.65, cabZ)); // passenger side + engine hump
-  body.add(box(1.45, 0.03, 1.76, INTERIOR, 0.625, 2.16, cabZ));
+  body.add(box(0.5, 0.75, 1.5, INTERIOR, 0, 1.6, cabZ + 0.1)); // engine hump / console
   body.add(box(2.7, 1.0, 0.12, TRUCK_WHITE, 0, 1.65, cabZ + 0.89)); // front wall
   body.add(box(2.7, 1.95, 0.1, TRUCK_WHITE, 0, 2.15, cabZ - 0.92)); // back wall
   body.add(box(2.3, 0.25, 0.35, INTERIOR, 0, 2.3, cabZ + 0.72)); // dashboard
-  // Green waistline stripe on the front and passenger side
-  body.add(box(2.74, 0.14, 0.04, TRUCK_GREEN, 0, 1.95, cabZ + 0.96));
-  body.add(box(0.04, 0.14, 1.94, TRUCK_GREEN, 1.37, 1.95, cabZ));
-  // Passenger door seam + handle
-  body.add(box(0.01, 0.85, 0.04, 0xb9bcc2, 1.356, 1.62, cabZ - 0.55));
-  body.add(box(0.04, 0.06, 0.25, CHROME, 1.37, 1.85, cabZ - 0.3));
-  // Pillars: full height on the open driver's side
-  body.add(box(0.12, 0.98, 0.12, TRUCK_WHITE, 1.29, 2.64, cabZ + 0.89));
-  body.add(box(0.12, 0.98, 0.12, TRUCK_WHITE, 1.29, 2.64, cabZ - 0.89));
-  body.add(box(0.14, 1.95, 0.14, TRUCK_WHITE, -1.29, 2.13, cabZ + 0.89));
-  body.add(box(0.14, 1.95, 0.14, TRUCK_WHITE, -1.29, 2.13, cabZ - 0.89));
-  body.add(box(0.05, 1.95, 0.05, TRUCK_GREEN, -1.36, 2.13, cabZ + 0.84)); // doorway trim
-  body.add(box(0.05, 1.95, 0.05, TRUCK_GREEN, -1.36, 2.13, cabZ - 0.84));
-  // Grab handle and a step up into the doorway
-  body.add(cyl(0.04, 0.04, 0.9, CHROME, -1.38, 2.2, cabZ - 0.72, 6));
-  body.add(box(0.4, 0.08, 0.9, CHROME, -1.45, 0.9, cabZ));
-  body.add(box(0.06, 0.3, 0.06, CHROME, -1.38, 1.04, cabZ - 0.4));
-  body.add(box(0.06, 0.3, 0.06, CHROME, -1.38, 1.04, cabZ + 0.4));
+  body.add(box(2.74, 0.14, 0.04, TRUCK_GREEN, 0, 1.95, cabZ + 0.96)); // waistline stripe
+  for (const sx of [1, -1]) {
+    // Full-height pillars with green trim around each doorway
+    body.add(box(0.14, 1.95, 0.14, TRUCK_WHITE, sx * 1.29, 2.13, cabZ + 0.89));
+    body.add(box(0.14, 1.95, 0.14, TRUCK_WHITE, sx * 1.29, 2.13, cabZ - 0.89));
+    body.add(box(0.05, 1.95, 0.05, TRUCK_GREEN, sx * 1.36, 2.13, cabZ + 0.84));
+    body.add(box(0.05, 1.95, 0.05, TRUCK_GREEN, sx * 1.36, 2.13, cabZ - 0.84));
+    // Grab handle and a step up into the doorway
+    body.add(cyl(0.04, 0.04, 0.9, CHROME, sx * 1.38, 2.2, cabZ - 0.72, 6));
+    body.add(box(0.4, 0.08, 0.9, CHROME, sx * 1.45, 0.9, cabZ));
+    body.add(box(0.06, 0.3, 0.06, CHROME, sx * 1.38, 1.04, cabZ - 0.4));
+    body.add(box(0.06, 0.3, 0.06, CHROME, sx * 1.38, 1.04, cabZ + 0.4));
+  }
+  // Passenger seat with its passenger: a pizza box, seatbelt on
+  body.add(box(0.9, 0.3, 0.8, 0x8e5b3d, 0.75, 1.42, cabZ - 0.3));
+  body.add(box(0.9, 1.05, 0.22, 0x8e5b3d, 0.75, 2.05, cabZ - 0.75));
+  const pizza = box(0.75, 0.1, 0.75, 0xf4f4ef, 0.75, 1.63, cabZ - 0.25);
+  pizza.rotation.y = 0.25;
+  body.add(pizza);
+  const pizzaLogo = cyl(0.22, 0.22, 0.02, 0xd9534f, 0.75, 1.69, cabZ - 0.25, 12);
+  body.add(pizzaLogo);
+  const belt = box(0.06, 0.02, 1.05, 0x2b2d33, 0.75, 1.72, cabZ - 0.45);
+  belt.rotation.y = 0.6;
+  body.add(belt);
   // Roof with a little visor over the windshield
   body.add(box(2.76, 0.16, 1.96, TRUCK_WHITE, 0, 3.17, cabZ));
   body.add(box(2.6, 0.08, 0.3, TRUCK_GREEN, 0, 3.08, cabZ + 1.05));
-  // Glass: windshield + passenger window (the driver's side is open)
+  // Glass: windshield only (both doorways are open)
   const glass = new THREE.MeshToonMaterial({ color: 0xbfeaff, gradientMap: gradient, transparent: true, opacity: 0.3, depthWrite: false });
   const ws = new THREE.Mesh(new THREE.PlaneGeometry(2.46, 0.92), glass);
   ws.position.set(0, 2.62, cabZ + 0.9);
   body.add(ws);
-  const sideGlass = new THREE.Mesh(new THREE.PlaneGeometry(1.68, 0.92), glass);
-  sideGlass.position.set(1.3, 2.62, cabZ);
-  sideGlass.rotation.y = Math.PI / 2;
-  body.add(sideGlass);
   // Mirrors on the front fenders, so they don't block Steve's view (or ours)
   for (const sx of [1, -1]) {
     body.add(cyl(0.03, 0.03, 0.5, DARK, sx * 1.25, 2.1, 3.55, 6));
@@ -482,52 +484,60 @@ export function makeTruck() {
     body.add(logo);
   }
 
-  // Automated side-loader arm on the right side (-x), level with the hopper:
-  // a telescoping boom slides out to the curb, a lever hangs from its end,
-  // and a wrist holds the can. The lever swings up around the outside and
-  // over the top, so nothing ever passes through the body.
-  const ARM = { R: 2.1, GRIP: 0.62, MAX_EXT: 3.3 };
-  const ARM_YELLOW = 0xffc93c;
-  const STEEL = 0x55585f;
-  body.add(box(0.35, 0.5, 0.7, STEEL, -1.6, 2.9, HOP_Z)); // mount on the hopper wall
-  const armBase = new THREE.Group();
-  armBase.position.set(-1.85, 2.9, HOP_Z);
-  body.add(armBase);
-  armBase.add(box(0.7, 0.34, 0.34, STEEL, -0.1, 0, 0)); // sleeve
-  const boomGeo = new THREE.BoxGeometry(1, 0.24, 0.24);
-  boomGeo.translate(-0.5, 0, 0);
-  const boom = new THREE.Mesh(boomGeo, toon(0xd5d9df));
-  boom.castShadow = true;
-  armBase.add(boom);
-  const slide = new THREE.Group();
-  armBase.add(slide);
-  const pin = (parent, r = 0.17) => {
-    const j = cyl(r, r, 0.46, STEEL, 0, 0, 0, 12);
-    j.rotation.x = Math.PI / 2;
-    parent.add(j);
+  // Automated side-loader arms, one per side, level with the hopper. Each is
+  // built on the right (-x); the left one lives in a mirrored group.
+  const buildArm = (P) => {
+    const ARM = { R: 2.1, GRIP: 0.62, MAX_EXT: 6.4 };
+    const ARM_YELLOW = 0xffc93c;
+    const STEEL = 0x55585f;
+    P.add(box(0.35, 0.5, 0.7, STEEL, -1.6, 2.9, HOP_Z)); // mount on the hopper wall
+    const armBase = new THREE.Group();
+    armBase.position.set(-1.85, 2.9, HOP_Z);
+    P.add(armBase);
+    armBase.add(box(0.7, 0.34, 0.34, STEEL, -0.1, 0, 0)); // sleeve
+    const boomGeo = new THREE.BoxGeometry(1, 0.24, 0.24);
+    boomGeo.translate(-0.5, 0, 0);
+    const boom = new THREE.Mesh(boomGeo, toon(0xd5d9df));
+    boom.castShadow = true;
+    armBase.add(boom);
+    const slide = new THREE.Group();
+    armBase.add(slide);
+    const pin = (parent, r = 0.17) => {
+      const j = cyl(r, r, 0.46, STEEL, 0, 0, 0, 12);
+      j.rotation.x = Math.PI / 2;
+      parent.add(j);
+    };
+    pin(slide, 0.2);
+    const lever = new THREE.Group();
+    slide.add(lever);
+    lever.add(box(0.22, ARM.R, 0.26, ARM_YELLOW, 0, -ARM.R / 2, 0));
+    lever.add(box(0.06, ARM.R * 0.7, 0.28, 0x2b2d33, 0.09, -ARM.R / 2, 0)); // hydraulic line
+    const wrist = new THREE.Group();
+    wrist.position.y = -ARM.R;
+    lever.add(wrist);
+    pin(wrist, 0.15);
+    // Palm plate facing outward and two fingers that close around the can
+    wrist.add(box(0.12, 0.6, 0.9, STEEL, -0.08, 0, 0));
+    const fingers = [];
+    for (const side of [1, -1]) {
+      const f = new THREE.Group();
+      f.position.set(-0.12, 0, side * 0.42);
+      f.add(box(0.75, 0.16, 0.1, STEEL, -0.37, 0, 0));
+      f.add(box(0.1, 0.16, 0.3, STEEL, -0.72, 0, -side * 0.12));
+      f.userData.side = side;
+      wrist.add(f);
+      fingers.push(f);
+    }
+    return { base: armBase, boom, slide, lever, wrist, gripper: wrist, fingers, ...ARM };
+
   };
-  pin(slide, 0.2);
-  const lever = new THREE.Group();
-  slide.add(lever);
-  lever.add(box(0.22, ARM.R, 0.26, ARM_YELLOW, 0, -ARM.R / 2, 0));
-  lever.add(box(0.06, ARM.R * 0.7, 0.28, 0x2b2d33, 0.09, -ARM.R / 2, 0)); // hydraulic line
-  const wrist = new THREE.Group();
-  wrist.position.y = -ARM.R;
-  lever.add(wrist);
-  pin(wrist, 0.15);
-  // Palm plate facing outward and two fingers that close around the can
-  wrist.add(box(0.12, 0.6, 0.9, STEEL, -0.08, 0, 0));
-  const fingers = [];
-  for (const side of [1, -1]) {
-    const f = new THREE.Group();
-    f.position.set(-0.12, 0, side * 0.42);
-    f.add(box(0.75, 0.16, 0.1, STEEL, -0.37, 0, 0));
-    f.add(box(0.1, 0.16, 0.3, STEEL, -0.72, 0, -side * 0.12));
-    f.userData.side = side;
-    wrist.add(f);
-    fingers.push(f);
-  }
-  const arm = { base: armBase, boom, slide, lever, wrist, gripper: wrist, fingers, ...ARM };
+  const arms = [buildArm(body)];
+  const mirror = new THREE.Group();
+  mirror.scale.x = -1;
+  body.add(mirror);
+  arms.push(buildArm(mirror));
+  arms[0].side = 'right';
+  arms[1].side = 'left';
 
   // Wheels + fenders
   const wheels = [];
@@ -611,7 +621,7 @@ export function makeTruck() {
   const hopperLocal = new THREE.Vector3(0, 3.4, HOP_Z); // mouth of the open hopper
   const rearLocal = new THREE.Vector3(0, 2.5, -4.2); // rear door, for unloading
 
-  return { group, body, wheels, frontWheels, arm, beacon, beaconMat, steve, hopperLocal, rearLocal, fill, lampMat };
+  return { group, body, wheels, frontWheels, arms, beacon, beaconMat, steve, hopperLocal, rearLocal, fill, lampMat };
 }
 
 // ---------------------------------------------------------------------------
@@ -1128,4 +1138,24 @@ export function makeStatue() {
   r.arms[0].add(lid);
   r.group.scale.setScalar(2.4);
   return r.group;
+}
+
+/** A shiny lost treasure: a spinning gem with a halo and a beam of light. */
+export function makeTreasure(color) {
+  const g = new THREE.Group();
+  const spin = new THREE.Group();
+  g.add(spin);
+  const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.7, 0), glow(color, 0.7));
+  gem.scale.y = 1.4;
+  spin.add(shadowy(gem));
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(1.1, 0.07, 6, 24), glow(0xffffff, 1));
+  halo.rotation.x = Math.PI / 2;
+  spin.add(halo);
+  const beam = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.5, 0.9, 40, 12, 1, true),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide }),
+  );
+  beam.position.y = 20;
+  g.add(beam);
+  return { group: g, spin, beam };
 }

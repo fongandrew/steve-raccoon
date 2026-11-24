@@ -18,20 +18,26 @@ Then open the URL Vite prints. To build a static copy, run `npm run build`; the 
 
 You have one shift, from 6 AM to 6 PM, which takes three real minutes. Score as many points as you can.
 
-- **Grab trash:** pull up with a glowing trash can on your **right** (the claw side) and slow down. The claw grabs it automatically.
+- **Grab trash:** stop near a glowing trash can and the claw on that side grabs it. The truck
+  has a claw on each side: stop between cans on both sides of the street for a **double grab**.
   Grabbing cans back to back builds a **streak** bonus. **Golden cans** are worth a lot more.
-- **Dump it:** the truck holds 12 bags. Unload on the yellow pad at **The Dump** (orange dot on the
-  minimap). Each bag is worth 10 points, and a completely full load earns a **+100 bonus**.
+- **Dump it:** the truck holds 12 bags (you can see the pile in the open hopper). Unload on the
+  yellow pad at **The Dump** (orange dot on the minimap). Each bag is worth 10 points, and a
+  completely full load earns a **+100 bonus**.
+- **Drift boost:** hold **Space** while turning at speed to drift. The sparks go blue, then
+  orange, then pink as the drift charges. Let go to boost.
+- **Treasures:** ten shiny lost treasures are hidden around town for Steve's hoard; follow the
+  beams of light. The ones floating past the park ramps can only be reached with a jump.
 - **Feed Steve:** his tummy empties over time. Press **E** to eat a bag from the truck. Snacks are
   random: coffee grounds give you the zoomies, flat soda gives you hiccups, and sometimes it's a sock.
   If his tummy hits zero, Steve gets **HANGRY** and the truck gets slow and wobbly.
-- **Style points:** each park has a ramp. Air time scores points, and so does knocking over traffic cones.
+- **Golden Hour:** in the last 30 seconds of the shift, every point counts double.
 - **Be nice:** mailboxes, fire hydrants and cats cost you points. Honk (**H**) to make cats jump out of the way.
 
 | Key | Action |
 | --- | --- |
 | W A S D / arrow keys | Drive |
-| Space / Shift | Handbrake drift |
+| Space / Shift | Drift (release to boost) |
 | E | Snack |
 | H | Honk |
 | R | Unstick (snap back onto the road) |

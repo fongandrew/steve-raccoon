@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import {
   buildWorld, groundHeight, isOnLawn, surfaceHeight, HALF, N, BLOCK, PITCH, ROAD, ROAD_Y, LAWN_Y, roadCenter, blockCenter, rng,
 } from './world.js';
-import { makeTruck, makeCat, makeCloud, nightMats, toon, glow } from './models.js';
+import { makeTruck, makeCat, makeCloud, makeTreasure, nightMats, toon, glow } from './models.js';
 import { Audio } from './audio.js';
 
 // ---------------------------------------------------------------------------
@@ -13,7 +13,7 @@ const CAPACITY = 12;
 const MAX_SPEED = 24;
 const ACTIVE_CANS = 7;
 const GRAVITY = 30;
-const STAR_SCORES = [250, 550, 900];
+const STAR_SCORES = [300, 650, 1100];
 
 const SNACKS = [
   { h: 40, msg: 'Half a burrito. Still warm-ish.' },
@@ -42,10 +42,10 @@ const QUIPS = [
 
 const RANKS = [
   [0, 'Trash Intern'],
-  [200, 'Garbage Gremlin'],
-  [450, 'Bin Bandit'],
-  [750, 'Dumpster Duke'],
-  [1100, 'Supreme Trash Panda'],
+  [250, 'Garbage Gremlin'],
+  [550, 'Bin Bandit'],
+  [900, 'Dumpster Duke'],
+  [1300, 'Supreme Trash Panda'],
 ];
 
 // ---------------------------------------------------------------------------
@@ -539,7 +539,10 @@ const state = {
   chompT: 0,
   snackCd: 0,
   honkCd: 0,
-  grab: null,
+  grabs: [],
+  driftCharge: 0,
+  boostT: 0,
+  goldenHour: false,
   spawnT: 0,
   streak: 0,
   lastCollect: -99,
@@ -563,11 +566,14 @@ function resetGame() {
   camHeading = 0;
   Object.assign(state, {
     time: 0, score: 0, load: 0, hunger: 100, hangry: false, zoomT: 0, hicT: 0, chompT: 0, snackCd: 0, honkCd: 0,
-    grab: null, spawnT: 0, streak: 0, lastCollect: -99, dumping: null, quipT: 18, shake: 0, celebrateT: 0, warned: false,
-    stats: { cans: 0, golden: 0, bags: 0, snacks: 0, bonks: 0, cats: 0, air: 0, loads: 0 },
+    grabs: [], driftCharge: 0, boostT: 0, goldenHour: false, spawnT: 0, streak: 0, lastCollect: -99, dumping: null, quipT: 18, shake: 0, celebrateT: 0, warned: false,
+    stats: { cans: 0, golden: 0, bags: 0, snacks: 0, bonks: 0, cats: 0, air: 0, loads: 0, doubles: 0, treasures: 0, boosts: 0 },
   });
   for (const h of world.houses) {
-    for (const c of [h.can, h.goldCan]) if (c.group.parent !== scene) scene.attach(c.group);
+    for (const c of [h.can, h.goldCan]) {
+      if (c.group.parent !== scene) scene.attach(c.group);
+      c.group.scale.set(1, 1, 1);
+    }
     h.state = 'idle';
     h.cooldown = 0;
     h.golden = false;
@@ -575,6 +581,7 @@ function resetGame() {
   }
   for (const p of world.props) resetProp(p);
   for (const c of cats) placeCat(c);
+  resetTreasures();
   for (let i = 0; i < ACTIVE_CANS; i++) spawnCan(true);
 }
 
@@ -619,33 +626,34 @@ function canFor(h) {
 // the hopper (lift = LIFT_MAX), and a wrist that sets the can's tilt (tilt = 0
 // keeps it upright, DUMP_TILT tips it into the hopper).
 // ---------------------------------------------------------------------------
-const ARM = truck.arm;
+const ARMS = truck.arms;
+const ARM = ARMS[0]; // shared dimensions
 const LIFT_MAX = (210 * Math.PI) / 180;
 const DUMP_TILT = (-150 * Math.PI) / 180;
 const REST = { ext: 0, yaw: 0, lift: 0, tilt: 0 };
-const armPose = { ...REST, close: 0 };
+for (const a of ARMS) a.pose = { ...REST, close: 0 };
 const armTmp = new THREE.Vector3();
 
 /** Boom extension + yaw needed to hold a can whose base is at world point p. */
-function canToArm(p) {
-  ARM.base.worldToLocal(armTmp.copy(p));
+function canToArm(arm, p) {
+  arm.base.worldToLocal(armTmp.copy(p));
   // undo the base's own yaw so we get the yaw needed to face the can
-  const c = Math.cos(ARM.base.rotation.y);
-  const sn = Math.sin(ARM.base.rotation.y);
+  const c = Math.cos(arm.base.rotation.y);
+  const sn = Math.sin(arm.base.rotation.y);
   const x = armTmp.x * c + armTmp.z * sn;
   const z = -armTmp.x * sn + armTmp.z * c;
   const horiz = Math.hypot(x, z);
   return { ext: horiz - ARM.GRIP, yaw: Math.atan2(z, -x), side: -x };
 }
 
-function applyArm(pose) {
-  const ext = Math.max(0, Math.min(ARM.MAX_EXT, pose.ext));
-  ARM.base.rotation.y = pose.yaw;
-  ARM.boom.scale.x = Math.max(0.01, ext);
-  ARM.slide.position.x = -ext;
-  ARM.lever.rotation.z = -pose.lift;
-  ARM.wrist.rotation.z = pose.tilt + pose.lift; // tilt is relative to the truck, not the lever
-  for (const f of ARM.fingers) f.rotation.y = f.userData.side * (0.55 - pose.close * 0.62);
+function applyArm(arm, pose) {
+  const ext = Math.max(0, Math.min(arm.MAX_EXT, pose.ext));
+  arm.base.rotation.y = pose.yaw;
+  arm.boom.scale.x = Math.max(0.01, ext);
+  arm.slide.position.x = -ext;
+  arm.lever.rotation.z = -pose.lift;
+  arm.wrist.rotation.z = pose.tilt + pose.lift; // tilt is relative to the truck, not the lever
+  for (const f of arm.fingers) f.rotation.y = f.userData.side * (0.55 - pose.close * 0.62);
 }
 
 const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
@@ -660,12 +668,21 @@ const swing = (k) => {
   return { ext: 0, yaw: 0, lift, tilt: DUMP_TILT * ease(tip) };
 };
 
-function startGrab(h) {
+function startGrab(h, arm) {
   h.state = 'grabbing';
   h.marker.group.visible = false;
   h.goldMarker.group.visible = false;
   const can = canFor(h);
-  state.grab = { h, t: 0, added: false, attached: false, released: false, home: can.group.position.clone(), rotY: can.group.rotation.y };
+  const g = { h, arm, t: 0, added: false, attached: false, released: false, home: can.group.position.clone(), rotY: can.group.rotation.y };
+  // Grabbing on both sides at nearly the same time is a double grab
+  const other = state.grabs.find((o) => o.arm !== arm);
+  if (other && other.t < 0.6) {
+    addScore(25);
+    popup('DOUBLE GRAB! +25', truck.group.position, 'gold', 5);
+    audio.golden();
+    state.stats.doubles++;
+  }
+  state.grabs.push(g);
   audio.grab();
 }
 
@@ -680,22 +697,26 @@ const GT = {};
   }
 }
 const phase = (t, k) => Math.max(0, Math.min(1, (t - GT[k][0]) / G[k]));
-applyArm(armPose);
+for (const a of ARMS) applyArm(a, a.pose);
 
-function updateGrab(dt) {
-  const g = state.grab;
+function updateGrabs(dt) {
   truck.body.updateMatrixWorld(true);
-  if (!g) {
+  for (const arm of ARMS) {
+    if (state.grabs.some((g) => g.arm === arm)) continue;
     const k = 1 - Math.exp(-10 * dt);
-    Object.assign(armPose, lerpPose(armPose, REST, k));
-    armPose.close += (0 - armPose.close) * k;
-    applyArm(armPose);
-    return;
+    Object.assign(arm.pose, lerpPose(arm.pose, REST, k));
+    arm.pose.close += (0 - arm.pose.close) * k;
+    applyArm(arm, arm.pose);
   }
+  for (const g of [...state.grabs]) updateGrab(g, dt);
+}
+
+function updateGrab(g, dt) {
+  const arm = g.arm;
   g.t += dt;
   const t = g.t;
   const can = canFor(g.h);
-  const grabPose = { ...canToArm(g.home), lift: 0, tilt: 0 };
+  const grabPose = { ...canToArm(arm, g.home), lift: 0, tilt: 0 };
   const carry = { ...REST };
   let pose;
   let close = 0;
@@ -707,7 +728,7 @@ function updateGrab(dt) {
   } else if (t < GT.dump[1]) {
     if (!g.attached) {
       g.attached = true;
-      ARM.gripper.attach(can.group);
+      arm.gripper.attach(can.group);
     }
     close = 1;
     if (t < GT.pull[1]) pose = lerpPose(grabPose, carry, ease(phase(t, 'pull')));
@@ -744,6 +765,7 @@ function updateGrab(dt) {
       scene.attach(can.group);
       can.group.position.copy(g.home);
       can.group.rotation.set(0, g.rotY, 0);
+      can.group.scale.set(1, 1, 1);
       can.lid.rotation.x = -0.6; // left ajar, as is tradition
     }
   } else if (t < GT.retract[1]) {
@@ -751,14 +773,14 @@ function updateGrab(dt) {
   } else {
     g.h.state = 'done';
     g.h.hideT = 4;
-    state.grab = null;
-    Object.assign(armPose, REST, { close: 0 });
-    applyArm(armPose);
+    state.grabs.splice(state.grabs.indexOf(g), 1);
+    Object.assign(arm.pose, REST, { close: 0 });
+    applyArm(arm, arm.pose);
     return;
   }
   g.hold = t < GT.release[1];
-  Object.assign(armPose, pose, { close });
-  applyArm(armPose);
+  Object.assign(arm.pose, pose, { close });
+  applyArm(arm, arm.pose);
 }
 
 function collectBags(h) {
@@ -792,6 +814,7 @@ function collectBags(h) {
 }
 
 function addScore(n) {
+  if (n > 0 && state.goldenHour) n *= 2;
   state.score = Math.max(0, state.score + n);
 }
 
@@ -827,10 +850,28 @@ function updateTruck(dt) {
     accel *= 0.6;
   }
   if (lawn) maxSpeed *= 0.5;
+  if (state.boostT > 0) {
+    maxSpeed *= 1.45;
+    accel *= 2.5;
+  }
+
+  // Drift charging: hold drift while turning at speed; let go to boost
+  const drifting = drift && T.grounded && Math.abs(fwd) > 8 && steerIn !== 0;
+  if (drifting) {
+    const before = boostLevel(state.driftCharge);
+    state.driftCharge = Math.min(2.2, state.driftCharge + dt);
+    const after = boostLevel(state.driftCharge);
+    if (after > before) audio.chargeUp(after);
+  } else if (!drift) {
+    if (state.driftCharge > 0 && playing) releaseBoost();
+    state.driftCharge = 0;
+  }
 
   if (T.grounded) {
-    const throttle = state.grab?.hold ? 0 : gas - brake;
-    if (state.grab?.hold) fwd -= Math.sign(fwd) * Math.min(Math.abs(fwd), 25 * dt);
+    const holding = state.grabs.some((g) => g.hold);
+    let throttle = holding ? 0 : gas - brake;
+    if (state.boostT > 0 && !holding) throttle = 1;
+    if (holding) fwd -= Math.sign(fwd) * Math.min(Math.abs(fwd), 25 * dt);
     if (throttle > 0) {
       if (fwd < maxSpeed) fwd = Math.min(maxSpeed, fwd + accel * dt * (fwd < 0 ? 2.5 : 1));
     } else if (throttle < 0) {
@@ -945,6 +986,26 @@ function updateTruck(dt) {
     }
   }
   if (maxImpact > 7) bonk(maxImpact);
+}
+
+function boostLevel(charge) {
+  return charge >= 1.9 ? 3 : charge >= 1.2 ? 2 : charge >= 0.6 ? 1 : 0;
+}
+const BOOST_COLORS = [0xffffff, 0x6ec6ff, 0xffa31a, 0xff6bd5];
+
+function releaseBoost() {
+  const level = boostLevel(state.driftCharge);
+  if (!level) return;
+  state.boostT = 0.5 + level * 0.45;
+  state.stats.boosts++;
+  const pts = [0, 5, 10, 20][level];
+  addScore(pts);
+  audio.boost(level);
+  state.shake = Math.max(state.shake, 0.25 + level * 0.1);
+  popup(`${['', 'BOOST!', 'SUPER BOOST!', 'ULTRA BOOST!'][level]} +${pts}`, truck.group.position, level === 3 ? 'gold' : 'fun', 2);
+  // instant kick forward
+  T.vel.x += Math.sin(T.heading) * 4 * level;
+  T.vel.z += Math.cos(T.heading) * 4 * level;
 }
 
 function resolve(c, nx, nz, pen) {
@@ -1253,6 +1314,31 @@ function animateTruck(dt, time) {
       color: state.zoomT > 0 ? 0xffd23f : 0xe4e7eb, size: 0.22, life: 1.0, grow: 3.2, sphere: true, alpha: 0.6,
     });
   }
+  // Drift sparks colored by charge level, and boost flames
+  const lvl = boostLevel(state.driftCharge);
+  if (state.driftCharge > 0.25) {
+    for (const sx of [1.3, -1.3]) {
+      if (Math.random() < 0.7) {
+        const p = truck.group.localToWorld(tmpV.set(sx, 0.25, -2.9));
+        spawnParticle({
+          pos: p, vel: new THREE.Vector3((Math.random() - 0.5) * 4, 2 + Math.random() * 3, (Math.random() - 0.5) * 4),
+          color: BOOST_COLORS[lvl], size: 0.14 + lvl * 0.04, life: 0.35, grav: 14,
+        });
+      }
+    }
+  }
+  if (state.boostT > 0) {
+    for (let i = 0; i < 2; i++) {
+      const p = truck.group.localToWorld(tmpV.set(1.22, 3.95, 1.3));
+      spawnParticle({
+        pos: p, vel: new THREE.Vector3((Math.random() - 0.5), 3 + Math.random() * 2, (Math.random() - 0.5)),
+        color: Math.random() < 0.5 ? 0xff7a1a : 0xffd23f, size: 0.3, life: 0.35, grow: 1.5, sphere: true,
+      });
+    }
+    const r = truck.group.localToWorld(tmpV.set((Math.random() - 0.5) * 2, 1 + Math.random() * 2, -4.2));
+    spawnParticle({ pos: r, vel: new THREE.Vector3(-Math.sin(T.heading) * 6, 0.5, -Math.cos(T.heading) * 6), color: 0xffffff, size: 0.12, life: 0.25 });
+  }
+
   // Drift dust
   if (T.grounded && Math.abs(T.lat) > 3.5) {
     for (const sx of [1.3, -1.3]) {
@@ -1349,6 +1435,9 @@ function updateGameplay(dt) {
     audio.burp();
   }
 
+  if (state.boostT > 0) state.boostT -= dt;
+  updateTreasures(dt);
+
   // Snack effects
   if (state.zoomT > 0) {
     state.zoomT -= dt;
@@ -1383,26 +1472,26 @@ function updateGameplay(dt) {
       m.arrow.position.y = 3 + Math.sin(state.time * 4 + h.x) * 0.3;
       m.arrow.rotation.y += dt * 3;
       m.ring.scale.setScalar(1 + Math.sin(state.time * 5) * 0.08);
-      if (!state.grab && T.grounded && Math.abs(T.fwd) < 5) {
+      if (T.grounded && Math.abs(T.fwd) < 5) {
         const d = Math.hypot(h.canX - T.pos.x, h.canZ - T.pos.z);
-        const a = d < 8 ? canToArm(canFor(h).group.position) : null;
-        const reachable = a && a.side > 0.3 && a.ext > 0.2 && a.ext < ARM.MAX_EXT && Math.abs(a.yaw) < 1.1;
-        if (a && !reachable && d < 6 && !h.sideHinted) {
-          h.sideHinted = true;
-          popup('Claw is on the right!', pos, 'fun', 3);
+        // Whichever claw is free and on the can's side takes it
+        let arm = null;
+        if (d < 10) {
+          for (const a of ARMS) {
+            if (state.grabs.some((g) => g.arm === a)) continue;
+            const r = canToArm(a, canFor(h).group.position);
+            if (r.side > 0.3 && r.ext > 0.2 && r.ext < a.MAX_EXT && Math.abs(r.yaw) < 1.1) arm = a;
+          }
         }
-        if (reachable) {
+        if (arm) {
           if (state.load >= CAPACITY) {
             if (!h.fullWarned) {
               h.fullWarned = true;
               popup('TRUCK FULL!', pos, 'bad');
               toast('No room! Empty the truck at The Dump first.');
             }
-          } else startGrab(h);
-        } else {
-          h.fullWarned = false;
-          if (d > 10) h.sideHinted = false;
-        }
+          } else startGrab(h, arm);
+        } else if (d > 10) h.fullWarned = false;
       }
     } else if (h.state === 'done') {
       h.hideT -= dt;
@@ -1413,7 +1502,7 @@ function updateGameplay(dt) {
       }
     }
   }
-  updateGrab(dt);
+  updateGrabs(dt);
 
   // Dump
   const dd = Math.hypot(world.dump.x - T.pos.x, world.dump.z - T.pos.z);
@@ -1486,8 +1575,9 @@ function updateGameplay(dt) {
   const left = SHIFT - state.time;
   if (!state.warned && left < 30) {
     state.warned = true;
-    toast("🌇 The sun's going down! 30 seconds left in Steve's shift!");
-    audio.whistle();
+    state.goldenHour = true;
+    toast("🌇 GOLDEN HOUR! 30 seconds left and every point counts DOUBLE!", 4);
+    audio.fanfare();
   }
   if (left <= 0) endShift();
 }
@@ -1628,7 +1718,7 @@ function updateCamera(dt, time) {
     camera.position.y += (Math.random() - 0.5) * state.shake;
     state.shake = Math.max(0, state.shake - dt * 2);
   }
-  const fov = 60 + speed * 0.35 + (state.zoomT > 0 ? 6 : 0);
+  const fov = 60 + speed * 0.35 + (state.zoomT > 0 ? 6 : 0) + (state.boostT > 0 ? 8 : 0);
   if (Math.abs(camera.fov - fov) > 0.05) {
     camera.fov += (fov - camera.fov) * Math.min(1, dt * 3);
     camera.updateProjectionMatrix();
@@ -1696,6 +1786,9 @@ function updateHud() {
   hud.hungerText.textContent = state.hunger > 60 ? 'happy' : state.hunger > 25 ? 'peckish' : state.hunger > 0 ? 'HUNGRY' : 'HANGRY';
   const st = [];
   if (state.hangry) st.push('😾 HANGRY! Press E');
+  if (state.goldenHour) st.push('⭐ GOLDEN HOUR x2');
+  if (state.boostT > 0) st.push('🔥 BOOST');
+  else if (state.driftCharge > 0.6) st.push(['', '💙 boost ready', '🧡 SUPER boost', '💖 ULTRA boost'][boostLevel(state.driftCharge)]);
   if (state.zoomT > 0) st.push('☕ ZOOMIES');
   if (state.hicT > 0) st.push('🫧 hiccups');
   if (state.streak > 1 && state.time - state.lastCollect < 14) st.push(`🔥 streak x${state.streak}`);
@@ -1742,6 +1835,72 @@ function updateGuide(time) {
 }
 
 // ---------------------------------------------------------------------------
+// Treasures: shiny junk for Steve's hoard, scattered around town
+// ---------------------------------------------------------------------------
+const TREASURE_NAMES = [
+  'a rubber duck', 'a single roller skate', "a trophy for 'Most Improved'", 'a VHS tape of Cats 2',
+  'a golden spoon', 'half a treasure map', 'a tiny disco ball', 'a lucky sock (the other one)',
+  "somebody's dentures", 'the TV remote everyone was looking for',
+];
+const TREASURE_COLORS = [0xff6bd5, 0x6ec6ff, 0xffd23f, 0x7cf3a0, 0xc77dff, 0xff8c42];
+const treasures = [];
+{
+  const spots = [];
+  // Floating past the end of each park ramp: you have to jump for these
+  for (const r of world.ramps) {
+    spots.push([r.x + r.dirX * (r.len + 7), r.z + r.dirZ * (r.len + 7), LAWN_Y + 5.0]);
+  }
+  const dumpBlock = world.blocks.find((b) => b.type === 'dump');
+  spots.push([dumpBlock.cx + 15, dumpBlock.cz - 15, LAWN_Y + 1.6]);
+  const plaza = world.blocks.find((b) => b.type === 'plaza');
+  spots.push([plaza.cx, plaza.cz - 12, LAWN_Y + 1.6]);
+  // Tucked into a few backyards
+  const yards = world.blocks.filter((b) => b.type === 'houses');
+  for (const k of [3, 9, 15]) {
+    const b = yards[k % yards.length];
+    spots.push([b.cx + 5.5, b.cz + 5.5, LAWN_Y + 1.6]);
+  }
+  // Far corners of town
+  spots.push([roadCenter(0), roadCenter(0), ROAD_Y + 1.6]);
+  spots.push([roadCenter(N), roadCenter(N), ROAD_Y + 1.6]);
+  spots.forEach(([x, z, y], i) => {
+    const t = makeTreasure(TREASURE_COLORS[i % TREASURE_COLORS.length]);
+    t.group.position.set(x, y, z);
+    t.beam.position.y = 20 - (y - 1.6);
+    scene.add(t.group);
+    treasures.push({ ...t, x, y, z, name: TREASURE_NAMES[i % TREASURE_NAMES.length], found: false });
+  });
+}
+
+function resetTreasures() {
+  for (const t of treasures) {
+    t.found = false;
+    t.group.visible = true;
+  }
+}
+
+function updateTreasures(dt) {
+  for (const t of treasures) {
+    if (t.found) continue;
+    t.spin.rotation.y += dt * 2;
+    t.spin.position.y = Math.sin(state.time * 2.5 + t.x) * 0.2;
+    const dy = t.y - (T.y + 1.6);
+    if (Math.hypot(t.x - T.pos.x, t.z - T.pos.z) < 3.4 && Math.abs(dy) < 2.3) {
+      t.found = true;
+      t.group.visible = false;
+      state.stats.treasures++;
+      addScore(50);
+      audio.treasure();
+      burst(t.group.position.clone(), 30, { colors: [0xffffff, 0xffd23f, 0xff6bd5, 0x6ec6ff], size: 0.25, life: 1.1, grav: 8, speed: 10, up: 8 });
+      popup('TREASURE! +50', truck.group.position, 'gold', 4);
+      const n = state.stats.treasures;
+      toast(`💎 Steve found ${t.name}! Into the hoard it goes. (${n}/${treasures.length})`, 4);
+      if (n === treasures.length) setTimeout(() => toast('👑 The hoard is complete. Steve weeps with joy.', 4), 1500);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Screens
 // ---------------------------------------------------------------------------
 const BEST_KEY = 'steveRaccoonBest';
@@ -1781,6 +1940,9 @@ function endShift() {
     ['Snacks eaten', st.snacks],
     ['Longest air', `${st.air.toFixed(1)}s`],
     ['Mailboxes & hydrants', st.bonks],
+    ['Treasures hoarded', `${st.treasures}/${treasures.length}`],
+    ['Double grabs', st.doubles],
+    ['Boosts', st.boosts],
     ['Cats offended', st.cats],
   ];
   $('resultTable').innerHTML = rows.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('');
