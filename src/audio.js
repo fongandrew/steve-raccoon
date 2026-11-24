@@ -157,6 +157,11 @@ export class Audio {
   beep() {
     this.tone(1000, 0.12, { type: 'square', vol: 0.05 });
   }
+  gooseHonk() {
+    const pitch = 330 + Math.random() * 60;
+    this.tone(pitch, 0.22, { type: 'sawtooth', vol: 0.14, slide: -90 });
+    this.tone(pitch * 1.5, 0.18, { type: 'square', vol: 0.05, slide: -120 });
+  }
   clang() {
     this.tone(880, 0.35, { type: 'square', vol: 0.06, slide: -200 });
     this.tone(1320, 0.25, { type: 'triangle', vol: 0.07 });

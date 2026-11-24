@@ -684,7 +684,7 @@ function buildDump(S, scene, world, rand, cx, cz) {
   padRing.rotation.x = -Math.PI / 2;
   padRing.position.set(padX, LAWN_Y + 0.03, padZ);
   scene.add(padRing);
-  world.dump = { x: padX, z: padZ, r: 6, pad, padRing };
+  world.dump = { x: padX, z: padZ, r: 6, pad, padRing, pileX: px, pileZ: pz, pileR: 7, pileH: 4.2, pileY: LAWN_Y };
 
   const sign = makeSign(['THE DUMP', 'unload here ♥'], '#8e5b3d', 6, 2.2);
   addProp(scene, world, sign, cx - F - 0.9, cz - 7, 1.2, 'sign', -Math.PI / 2);

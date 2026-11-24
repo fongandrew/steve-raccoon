@@ -21,7 +21,8 @@ You have one shift, from 6 AM to 6 PM, which takes three real minutes. Score as 
 - **Grab trash:** stop near a glowing trash can and the claw on that side grabs it. The truck
   has a claw on each side: stop between cans on both sides of the street for a **double grab**.
   Grabbing cans back to back builds a **streak** bonus. **Golden cans** are worth a lot more.
-- **Dump it:** the truck holds 12 bags (you can see the pile in the open hopper). Unload on the
+- **Dump it:** the truck holds 12 bags (you can see the pile in the open hopper). Each bag you
+  unload arcs onto the trash mountain, which grows over the shift. Unload on the
   yellow pad at **The Dump** (orange dot on the minimap). Each bag is worth 10 points, and a
   completely full load earns a **+100 bonus**.
 - **Drift boost:** hold **Space** while turning at speed to drift. The sparks go blue, then
@@ -37,6 +38,8 @@ You have one shift, from 6 AM to 6 PM, which takes three real minutes. Score as 
   picnic tables, trash bags and tires all tumble. Wreck things in quick succession for a
   **CHAOS** combo. Beach balls in the parks and plaza can be punted around, the plaza pigeons
   scatter when you roll up, and trees and bushes burst into leaves when you bump them.
+- **Geese:** they wander the streets and they do not move. Not for you, not for anyone. Hit one
+  and the truck bounces off, spills cargo, and gets honked at. Honk at them and they honk back.
 - **Be nice (a little):** mailboxes, fire hydrants and cats still cost you points. Honk (**H**)
   to make cats jump out of the way.
 

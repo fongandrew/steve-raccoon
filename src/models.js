@@ -1247,3 +1247,41 @@ export function makePigeon() {
   }
   return { group: g, wings };
 }
+
+/** A goose. Geese do not move for trucks. Returns { group, neck, body }. */
+export function makeGoose() {
+  const g = new THREE.Group();
+  const body = new THREE.Group();
+  g.add(body);
+  const torso = sphere(0.5, 0xf4f4ef, 0, 0.75, 0, 12);
+  torso.scale.set(0.8, 0.75, 1.3);
+  body.add(torso);
+  const tail = cone(0.25, 0.4, 0xf4f4ef, 0, 0.9, -0.65, 6);
+  tail.rotation.x = -1.9;
+  body.add(tail);
+  for (const s of [1, -1]) {
+    const wing = sphere(0.35, 0xdcdcd2, 0.33 * s, 0.82, -0.05, 8);
+    wing.scale.set(0.35, 0.6, 1.1);
+    body.add(wing);
+    body.add(cyl(0.04, 0.04, 0.45, 0xff9f1a, 0.15 * s, 0.22, 0, 5));
+    body.add(box(0.18, 0.04, 0.25, 0xff9f1a, 0.15 * s, 0.02, 0.08));
+  }
+  const neck = new THREE.Group();
+  neck.position.set(0, 1.0, 0.45);
+  body.add(neck);
+  const n = cyl(0.11, 0.14, 0.8, 0xf4f4ef, 0, 0.35, 0, 8);
+  neck.add(n);
+  neck.add(sphere(0.18, 0xf4f4ef, 0, 0.8, 0.06, 10));
+  const beak = cone(0.08, 0.3, 0xff9f1a, 0, 0.76, 0.3, 6);
+  beak.rotation.x = Math.PI / 2;
+  neck.add(beak);
+  for (const s of [1, -1]) {
+    neck.add(sphere(0.035, 0x111111, 0.13 * s, 0.86, 0.14, 6));
+    // angry little brow
+    const brow = box(0.12, 0.03, 0.03, 0x111111, 0.1 * s, 0.93, 0.16);
+    brow.rotation.z = 0.5 * s;
+    neck.add(brow);
+  }
+  addOutline(g, 0.02);
+  return { group: g, neck, body };
+}

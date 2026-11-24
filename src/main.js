@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import {
-  buildWorld, groundHeight, isOnLawn, surfaceHeight, HALF, N, BLOCK, PITCH, ROAD, ROAD_Y, LAWN_Y, roadCenter, blockCenter, rng,
+  buildWorld, groundHeight, isOnLawn, surfaceHeight, HALF, N, BLOCK, PITCH, ROAD, ROAD_Y, LAWN_Y, WALK_Y, roadCenter, blockCenter, rng,
 } from './world.js';
-import { makeTruck, makeCat, makeCloud, makeTreasure, makeBeachBall, makePigeon, nightMats, toon, glow } from './models.js';
+import { makeTruck, makeCat, makeCloud, makeTreasure, makeBeachBall, makePigeon, makeGoose, makeTrashBag, nightMats, toon, glow } from './models.js';
+import { PropBatch } from './props.js';
 import { Audio } from './audio.js';
 
 // ---------------------------------------------------------------------------
@@ -29,16 +30,77 @@ const SNACKS = [
   { h: 15, msg: 'A single grape. Steve savors it.' },
 ];
 
-const QUIPS = [
-  'Steve thinks this is the best job in the world.',
-  "One raccoon's trash is... also this raccoon's treasure.",
-  'Steve has been told, again, not to eat on the job.',
-  'Steve waves at a pigeon. The pigeon does not wave back.',
-  'Fun fact: Steve has never passed a driving test.',
-  'Steve is humming the trash truck song. There is no trash truck song.',
-  'Steve would like to remind you that the claw is not a toy. (It is.)',
-  "Steve's mom would be so proud. She lives in a dumpster.",
-];
+// The narrator: a detached, slightly ironic voice describing Steve's day.
+const LINES = {
+  ambient: [
+    'Steve thinks this is the best job in the world.',
+    "One raccoon's trash is... also this raccoon's treasure.",
+    'Steve has been told, again, not to eat on the job.',
+    'Steve waves at a pigeon. The pigeon does not wave back.',
+    'Fun fact: Steve has never passed a driving test.',
+    'Steve is humming the trash truck song. There is no trash truck song.',
+    'Steve would like to remind you that the claw is not a toy. (It is.)',
+    "Steve's mom would be so proud. She lives in a dumpster.",
+    'A reminder that Steve technically has no license.',
+  ],
+  pickup: [
+    'Steve declares the contents "vintage."',
+    'Steve sniffs the can. Is that... lasagna?',
+    "One man's trash is Steve's lunch.",
+    'Steve whispers "jackpot." It is coffee grounds.',
+    'Finders keepers, Steve reminds no one in particular.',
+    'Still warm. Steve is delighted.',
+  ],
+  crash: [
+    'Steve maintains the house came out of nowhere.',
+    'Steve would describe the brakes as "more of a suggestion."',
+    'Steve was parallel parking. Allegedly.',
+    'Insurance, Steve notes, is a human concept.',
+    'Steve meant to do that.',
+  ],
+  dump: [
+    'Goodbye, beautiful garbage.',
+    'Steve tells each bag to go be free.',
+    "Another honest day's work, by raccoon standards.",
+    'The trash mountain grows stronger. Steve feels a strange pride.',
+  ],
+  idle: [
+    'Steve has stopped to smell the air. It smells like heaven (garbage).',
+    'Steve washed his hands earlier. In a puddle.',
+    'Steve wonders, briefly, whether this counts as a break.',
+    'The trash will not collect itself, Steve. Well. Mostly not.',
+  ],
+  honk: [
+    'Steve honks. It is mostly for his own enjoyment.',
+    'Beep beep. Steve is coming through.',
+    'Make way, says the horn, for garbage.',
+  ],
+  goose: [
+    'Geese have the right of way. Always.',
+    'The goose is fine. The goose is always fine.',
+    'Steve apologizes to the goose. The goose does not accept.',
+    'Please do not tell the other geese.',
+    'Steve has learned nothing about geese.',
+  ],
+  prop: [
+    'Steve insists that was like that already.',
+    'Steve calls it "abstract landscaping."',
+    'Nobody saw that. (Everybody saw that.)',
+    'That mailbox, says Steve, had it coming.',
+    "Steve has tiny hands. He'd like that noted.",
+  ],
+};
+const pickLine = (kind) => LINES[kind][(Math.random() * LINES[kind].length) | 0];
+let lastNarration = -99;
+/** Narrate an event. Lines are rate-limited so the narrator doesn't babble. */
+function narrate(kind, chance = 1, force = false) {
+  if (state.mode !== 'playing' || Math.random() > chance) return;
+  if (!force && state.time - lastNarration < 7) return;
+  lastNarration = state.time;
+  state.quipT = Math.max(state.quipT, 15);
+  toast(pickLine(kind), 3.6);
+}
+
 
 const RANKS = [
   [0, 'Trash Intern'],
@@ -567,7 +629,7 @@ function resetGame() {
   Object.assign(state, {
     time: 0, score: 0, load: 0, hunger: 100, hangry: false, zoomT: 0, hicT: 0, chompT: 0, snackCd: 0, honkCd: 0,
     grabs: [], driftCharge: 0, boostT: 0, goldenHour: false, spawnT: 0, streak: 0, lastCollect: -99, dumping: null, quipT: 18, shake: 0, celebrateT: 0, warned: false,
-    stats: { cans: 0, golden: 0, bags: 0, snacks: 0, bonks: 0, cats: 0, air: 0, loads: 0, doubles: 0, treasures: 0, boosts: 0, smashed: 0 },
+    stats: { cans: 0, golden: 0, bags: 0, snacks: 0, bonks: 0, cats: 0, air: 0, loads: 0, doubles: 0, treasures: 0, boosts: 0, smashed: 0, geese: 0, dumped: 0 },
     chaos: 0, lastSmash: -9,
   });
   for (const h of world.houses) {
@@ -585,6 +647,10 @@ function resetGame() {
   resetTreasures();
   resetBalls();
   for (const pg of pigeons) placePigeon(pg);
+  resetPile();
+  for (const g of geese) placeGoose(g);
+  for (const b of spilled) scene.remove(b.mesh);
+  spilled.length = 0;
   for (let i = 0; i < ACTIVE_CANS; i++) spawnCan(true);
 }
 
@@ -692,6 +758,8 @@ function startGrab(h, arm) {
   h.marker.group.visible = false;
   h.goldMarker.group.visible = false;
   const can = canFor(h);
+  can.group.position.y = WALK_Y; // stop fidgeting, you're being picked up
+  can.group.rotation.z = 0;
   const g = { h, arm, t: 0, added: false, attached: false, released: false, home: can.group.position.clone(), rotY: can.group.rotation.y };
   // Grabbing on both sides at nearly the same time is a double grab
   const other = state.grabs.find((o) => o.arm !== arm);
@@ -829,6 +897,7 @@ function collectBags(h) {
     setTimeout(() => popup(`STREAK x${state.streak}!`, truck.group.position, 'fun', 2), 250);
   }
   if (got < n) toast("Truck's stuffed! Some trash fell on the lawn. Oops.");
+  else if (state.load < CAPACITY) narrate('pickup', 0.25);
   if (state.load >= CAPACITY) toast('🚛 Truck is FULL! Head to The Dump (orange on the map).');
 }
 
@@ -1067,6 +1136,7 @@ function bonk(strength) {
   state.shake = Math.max(state.shake, Math.min(0.8, strength * 0.04));
   if (strength > 10 && state.mode === 'playing') {
     popup(['BONK!', 'OOF!', 'WHOMP!', 'CLONK!'][(Math.random() * 4) | 0], truck.group.position, 'bad');
+    narrate('crash', 0.5);
   }
 }
 
@@ -1238,7 +1308,7 @@ function knockProp(p, nx, nz, speed) {
   state.shake = Math.max(state.shake, K.slow < 0.9 ? 0.25 : 0.08);
   if (p.kind === 'mailbox') {
     burst(p.home.clone().add(new THREE.Vector3(0, 1, 0)), 10, { color: 0xffffff, size: 0.35, life: 2, grav: 2, speed: 5, up: 5, drag: 1.5 });
-    if (Math.random() < 0.4) toast(['Steve did not see that mailbox. Steve sees very little.', 'That was a federal offense. Probably.', "Somebody's birthday card is now airborne."][(Math.random() * 3) | 0]);
+    if (Math.random() < 0.4) narrate('prop', 1, true);
   } else if (p.kind === 'hydrant') {
     audio.splash();
     p.geyser = 7;
@@ -1249,6 +1319,7 @@ function knockProp(p, nx, nz, speed) {
   // Chaos combo: wreck lots of stuff in quick succession
   state.chaos = state.time - state.lastSmash < 1.5 ? state.chaos + 1 : 1;
   state.lastSmash = state.time;
+  if (state.chaos === 1) narrate('prop', 0.2);
   if (state.chaos > 0 && state.chaos % 5 === 0) {
     const bonus = state.chaos * 2;
     addScore(bonus);
@@ -1545,6 +1616,9 @@ function updateGameplay(dt) {
     audio.honk();
     popup('HONK!', truck.group.position, 'fun', 4);
     for (const c of cats) if (Math.hypot(c.x - T.pos.x, c.z - T.pos.z) < 24) scareCat(c, 1.1);
+    // The geese honk back. Of course they do.
+    for (const g of geese) if (Math.hypot(g.x - T.pos.x, g.z - T.pos.z) < 30) g.replyT = 0.3 + Math.random() * 0.5;
+    narrate('honk', 0.25);
   }
   if (pressed.has('snack')) snack();
   if (pressed.has('reset')) unstick();
@@ -1600,6 +1674,12 @@ function updateGameplay(dt) {
       m.arrow.position.y = 3 + Math.sin(state.time * 4 + h.x) * 0.3;
       m.arrow.rotation.y += dt * 3;
       m.ring.scale.setScalar(1 + Math.sin(state.time * 5) * 0.08);
+      // Full cans get nervous when the truck is near
+      const cg = canFor(h).group;
+      const near = Math.hypot(h.canX - T.pos.x, h.canZ - T.pos.z) < 22;
+      const ph = h.x * 0.7;
+      cg.position.y = WALK_Y + (near ? Math.abs(Math.sin(state.time * 9 + ph)) * 0.28 : 0);
+      cg.rotation.z = near ? Math.sin(state.time * 18 + ph) * 0.07 : 0;
       if (T.grounded && Math.abs(T.fwd) < 5) {
         const d = Math.hypot(h.canX - T.pos.x, h.canZ - T.pos.z);
         // Whichever claw is free and on the can's side takes it
@@ -1638,7 +1718,7 @@ function updateGameplay(dt) {
   if (dd < world.dump.r && speed < 8 && T.grounded) {
     if (!state.dumping && state.load > 0) {
       state.dumping = { start: state.load, n: 0, tick: 0 };
-      toast(['Steve backs it up. beep. beep. beep.', 'Dumping! The seagulls are thrilled.', 'Steve whispers goodbye to each bag.'][(Math.random() * 3) | 0]);
+      narrate('dump', 1, true);
     }
   }
   if (state.dumping) {
@@ -1649,17 +1729,10 @@ function updateGameplay(dt) {
       D.tick = 0.13;
       state.load--;
       D.n++;
+      state.stats.dumped++;
       addScore(10);
       audio.dumpTick();
-      const hop = truck.group.localToWorld(tmpV.copy(truck.rearLocal));
-      const toPile = new THREE.Vector3(world.dump.x + 13 - hop.x, 6, world.dump.z - 13 - hop.z).multiplyScalar(0.6);
-      toPile.y = 8;
-      for (let i = 0; i < 3; i++) {
-        spawnParticle({
-          pos: hop, vel: toPile.clone().add(new THREE.Vector3((Math.random() - 0.5) * 3, Math.random() * 3, (Math.random() - 0.5) * 3)),
-          color: TRASH_COLORS[(Math.random() * TRASH_COLORS.length) | 0], size: 0.45, life: 1.6, grav: 14,
-        });
-      }
+      launchBagToPile(truck.group.localToWorld(tmpV.copy(truck.rearLocal)));
     }
     if (state.load === 0 || !inZone) {
       let bonus = 0;
@@ -1683,6 +1756,13 @@ function updateGameplay(dt) {
     }
   }
 
+  // Standing around too long earns commentary
+  state.idleT = speed < 1 && !state.dumping && !state.grabs.length ? (state.idleT || 0) + dt : 0;
+  if (state.idleT > 7) {
+    state.idleT = -20;
+    narrate('idle', 1, true);
+  }
+
   // Reverse beeper
   if (T.fwd < -0.5) {
     state.beepT -= dt;
@@ -1696,7 +1776,7 @@ function updateGameplay(dt) {
   state.quipT -= dt;
   if (state.quipT <= 0) {
     state.quipT = 22 + Math.random() * 15;
-    toast(QUIPS[(Math.random() * QUIPS.length) | 0]);
+    narrate('ambient');
   }
 
   // Time
@@ -1960,6 +2040,239 @@ function updateGuide(time) {
     T.pos.z + Math.cos(T.heading) * 3.5 + Math.cos(ang) * 1.5,
   );
   guide.rotation.y = ang;
+}
+
+// ---------------------------------------------------------------------------
+// The trash mountain: every dumped bag arcs onto the pile and stays there
+// ---------------------------------------------------------------------------
+const PILE_MAX = 220;
+const pileBatches = [0x2b2b2b, 0x3d7ea6, 0x40704a].map((c) => {
+  const t = makeTrashBag(() => 0);
+  t.traverse((m) => m.isMesh && m.material.color && m.material.color.getHex() === 0x2b2b2b && (m.material = toon(c)));
+  return new PropBatch(scene, t, PILE_MAX);
+});
+const flyingBags = [];
+let pileCount = 0;
+const _bm = new THREE.Matrix4();
+const _bq = new THREE.Quaternion();
+const _bs = new THREE.Vector3();
+
+function pileSpot() {
+  const D = world.dump;
+  const a = Math.random() * Math.PI * 2;
+  const r = Math.sqrt(Math.random()) * (D.pileR - 0.8);
+  const grow = Math.min(2.6, pileCount * 0.018); // the mountain rises over the shift
+  const y = D.pileY + (1 - r / D.pileR) * D.pileH * (1 + grow / D.pileH) - 0.15;
+  return new THREE.Vector3(D.pileX + Math.cos(a) * r, y, D.pileZ + Math.sin(a) * r);
+}
+
+function launchBagToPile(from) {
+  let f = flyingBags.find((b) => !b.active);
+  if (!f) {
+    const mesh = makeTrashBag(Math.random);
+    scene.add(mesh);
+    f = { mesh };
+    flyingBags.push(f);
+  }
+  f.active = true;
+  f.t = 0;
+  f.from = from.clone();
+  f.to = pileSpot();
+  f.batch = pileBatches[(Math.random() * pileBatches.length) | 0];
+  f.mesh.visible = true;
+  f.mesh.position.copy(from);
+}
+
+function updatePile(dt) {
+  for (const f of flyingBags) {
+    if (!f.active) continue;
+    f.t += dt / 0.85;
+    const k = Math.min(1, f.t);
+    f.mesh.position.lerpVectors(f.from, f.to, k);
+    f.mesh.position.y += Math.sin(k * Math.PI) * 8;
+    f.mesh.rotation.x += dt * 8;
+    f.mesh.rotation.z += dt * 5;
+    if (k >= 1) {
+      f.active = false;
+      f.mesh.visible = false;
+      // settle into the pile for good
+      const batch = f.batch;
+      if (batch.count < PILE_MAX) {
+        _bq.setFromEuler(new THREE.Euler((Math.random() - 0.5) * 0.6, Math.random() * 6, (Math.random() - 0.5) * 0.6));
+        _bs.setScalar(0.9 + Math.random() * 0.5);
+        batch.set(batch.add(), _bm.compose(f.to, _bq, _bs));
+      }
+      pileCount++;
+      burst(f.to.clone(), 3, { colors: TRASH_COLORS, size: 0.25, life: 0.6, grav: 15, speed: 4, up: 4 });
+    }
+  }
+}
+
+function resetPile() {
+  for (const b of pileBatches) b.reset();
+  for (const f of flyingBags) {
+    f.active = false;
+    f.mesh.visible = false;
+  }
+  pileCount = 0;
+}
+
+// ---------------------------------------------------------------------------
+// Geese: the one thing in town that does not get knocked over
+// ---------------------------------------------------------------------------
+const geese = [];
+const onRoad = (x, z) => surfaceHeight(x, z) === ROAD_Y && Math.abs(x) < HALF + 3 && Math.abs(z) < HALF + 3;
+for (let i = 0; i < 6; i++) {
+  const g = makeGoose();
+  g.group.scale.setScalar(1.5); // geese are large and in charge
+  scene.add(g.group);
+  geese.push({ ...g, x: 0, z: 0, h: 0, tx: 0, tz: 0, wait: 0, alert: 0, honkT: 0, hop: 0, cool: 0, replyT: 0 });
+}
+function placeGoose(g) {
+  do {
+    const i = (Math.random() * (N + 1)) | 0;
+    const along = -HALF + Math.random() * HALF * 2;
+    const off = (Math.random() - 0.5) * (ROAD - 4);
+    [g.x, g.z] = Math.random() < 0.5 ? [roadCenter(i) + off, along] : [along, roadCenter(i) + off];
+  } while (!onRoad(g.x, g.z) || Math.hypot(g.x - T.pos.x, g.z - T.pos.z) < 40);
+  g.home = [g.x, g.z];
+  g.tx = g.x;
+  g.tz = g.z;
+  g.alert = 0;
+}
+// Spilled cargo: bags that fly out of the hopper and then fade away
+const spilled = [];
+function spill(n) {
+  n = Math.min(n, state.load);
+  state.load -= n;
+  const from = truck.group.localToWorld(tmpV.copy(truck.hopperLocal));
+  for (let i = 0; i < n; i++) {
+    const mesh = makeTrashBag(Math.random);
+    scene.add(mesh);
+    const a = Math.random() * Math.PI * 2;
+    spilled.push({ mesh, pos: from.clone(), vel: new THREE.Vector3(Math.cos(a) * 6, 9 + Math.random() * 4, Math.sin(a) * 6), t: 0 });
+  }
+  if (n) popup(`-${n} SPILLED!`, truck.group.position, 'bad', 3);
+}
+function updateGeese(dt, time) {
+  const fx = Math.sin(T.heading);
+  const fz = Math.cos(T.heading);
+  for (const g of geese) {
+    const dx = T.pos.x - g.x;
+    const dz = T.pos.z - g.z;
+    const dist = Math.hypot(dx, dz);
+    g.cool -= dt;
+    g.hop = Math.max(0, g.hop - dt);
+    let walking = false;
+    if (dist > 17) g.alert = 0;
+    const standoff = dist < 11 && g.alert < 3.5 && state.mode === 'playing';
+    if (g.replyT > 0) {
+      g.replyT -= dt;
+      if (g.replyT <= 0) gooseHonk(g);
+    }
+    if (standoff) {
+      // Turn to face the truck and honk at it
+      g.alert += dt;
+      g.h = Math.atan2(dx, dz);
+      g.honkT -= dt;
+      if (g.honkT <= 0) {
+        g.honkT = 0.9 + Math.random() * 0.6;
+        gooseHonk(g);
+      }
+    } else if (g.wait > 0) {
+      g.wait -= dt;
+    } else {
+      const tx = g.tx - g.x;
+      const tz = g.tz - g.z;
+      if (Math.hypot(tx, tz) < 0.4) {
+        g.wait = 0.5 + Math.random() * 3;
+        for (let k = 0; k < 10; k++) {
+          const a = Math.random() * Math.PI * 2;
+          const r = 2 + Math.random() * 10;
+          const x = g.home[0] + Math.cos(a) * r;
+          const z = g.home[1] + Math.sin(a) * r;
+          if (onRoad(x, z)) {
+            g.tx = x;
+            g.tz = z;
+            break;
+          }
+        }
+      } else {
+        g.h = Math.atan2(tx, tz);
+        g.x += Math.sin(g.h) * 1.6 * dt;
+        g.z += Math.cos(g.h) * 1.6 * dt;
+        walking = true;
+      }
+    }
+    // Geese are immovable objects. The truck is not an unstoppable force.
+    if (T.y < 2) {
+      for (const off of [1.9, -1.9]) {
+        const cx = T.pos.x + fx * off;
+        const cz = T.pos.z + fz * off;
+        const ex = cx - g.x;
+        const ez = cz - g.z;
+        const d = Math.hypot(ex, ez);
+        const R = 2.4;
+        if (d < R && d > 1e-3) {
+          T.pos.x += (ex / d) * (R - d);
+          T.pos.z += (ez / d) * (R - d);
+          const speed = Math.hypot(T.vel.x, T.vel.z);
+          if (speed > 6 && g.cool <= 0 && state.mode === 'playing') {
+            g.cool = 2;
+            g.hop = 0.45;
+            T.vel.multiplyScalar(-0.45);
+            bonk(14);
+            gooseHonk(g, true);
+            spill(3);
+            state.streak = 0;
+            state.stats.geese++;
+            popup('GOOSE WINS', g.group.position, 'bad', 4);
+            narrate('goose', 1, true);
+          } else {
+            const vn = (T.vel.x * ex + T.vel.z * ez) / d;
+            if (vn < 0) {
+              T.vel.x -= (vn * ex) / d;
+              T.vel.z -= (vn * ez) / d;
+            }
+          }
+          break;
+        }
+      }
+    }
+    g.group.position.set(g.x, surfaceHeight(g.x, g.z) + Math.sin(g.hop * 14) * g.hop * 1.6, g.z);
+    g.group.rotation.y = g.h;
+    g.body.rotation.z = walking ? Math.sin(time * 9 + g.home[0]) * 0.12 : 0;
+    g.neck.rotation.x = g.hop > 0 || standoff ? -0.35 : 0.1 + Math.sin(time * 2 + g.home[1]) * 0.06;
+  }
+  // Spilled bags tumble out and fade
+  for (let i = spilled.length - 1; i >= 0; i--) {
+    const b = spilled[i];
+    b.t += dt;
+    b.vel.y -= GRAVITY * dt;
+    b.pos.addScaledVector(b.vel, dt);
+    const floor = surfaceHeight(b.pos.x, b.pos.z);
+    if (b.pos.y < floor) {
+      b.pos.y = floor;
+      b.vel.multiplyScalar(0.4);
+      b.vel.y = Math.abs(b.vel.y) * 0.3;
+    }
+    b.mesh.position.copy(b.pos);
+    b.mesh.rotation.x += dt * 6 * Math.max(0, 1 - b.t);
+    if (b.t > 3) b.mesh.scale.setScalar(Math.max(0.01, 1 - (b.t - 3)));
+    if (b.t > 4) {
+      scene.remove(b.mesh);
+      spilled.splice(i, 1);
+    }
+  }
+}
+let lastGooseHonk = -9;
+function gooseHonk(g, force = false) {
+  g.hop = Math.max(g.hop, 0.25);
+  popup('HONK!', g.group.position, 'bad', 2.6);
+  if (force || state.time - lastGooseHonk > 0.35) {
+    lastGooseHonk = state.time;
+    audio.gooseHonk();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -2230,6 +2543,19 @@ function startShift() {
   toast("☀️ Good morning, Steve! Grab the glowing trash cans. Shift ends at 6 PM.", 4);
 }
 
+function brendaSays(stars, st) {
+  if (st.geese >= 3) return '"Please stop hitting the geese. They have retained counsel."';
+  if (st.smashed >= 60) return '"The neighborhood association would like a word. Several words."';
+  if (st.snacks >= 6) return '"You ate more of the cargo than you delivered. Bold."';
+  if (st.treasures >= 8) return '"Impressive hoard. HR will be asking where it came from."';
+  return [
+    '"I have seen raccoons drive better. I have seen raccoons not drive at all, and that was also better."',
+    '"Surprisingly adequate. Suspicious."',
+    '"Fine work. I am docking you for the flamingos anyway."',
+    '"Exemplary. I am legally required to say I did not see the mailboxes."',
+  ][stars];
+}
+
 function endShift() {
   state.mode = 'results';
   audio.fanfare();
@@ -2242,16 +2568,18 @@ function endShift() {
   const st = state.stats;
   const rows = [
     ['Final score', s],
-    ['Cans grabbed', `${st.cans}${st.golden ? ` (${st.golden} golden)` : ''}`],
-    ['Loads dumped', st.loads],
-    ['Snacks eaten', st.snacks],
-    ['Longest air', `${st.air.toFixed(1)}s`],
-    ['Things knocked over', st.smashed],
+    ['Cans emptied', `${st.cans}${st.golden ? ` (${st.golden} golden)` : ''}`],
+    ['Bags delivered to The Dump', st.dumped],
+    ['Cargo eaten "for quality control"', st.snacks],
+    ['Longest airtime', `${st.air.toFixed(1)}s`],
+    ['Property "rearranged"', st.smashed],
     ['Treasures hoarded', `${st.treasures}/${treasures.length}`],
     ['Double grabs', st.doubles],
     ['Boosts', st.boosts],
+    ['Geese disrespected', st.geese],
     ['Cats offended', st.cats],
   ];
+  $('review').textContent = `${brendaSays(stars, st)} - Brenda (possum), Regional Manager`;
   $('resultTable').innerHTML = rows.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('');
   const isBest = s > getBest();
   if (isBest) localStorage.setItem(BEST_KEY, String(s));
@@ -2305,6 +2633,7 @@ function frame() {
     updateGameplay(dt);
     updateProps(dt);
     updateBushes();
+    updateGeese(dt, elapsed);
     updateCats(dt, elapsed);
   } else if (state.mode === 'title' || state.mode === 'results') {
     updateCats(dt, elapsed);
@@ -2317,6 +2646,7 @@ function frame() {
     updateAmbient(dt, elapsed);
     updateBalls(dt);
     updatePigeons(dt, elapsed);
+    updatePile(dt);
   }
   // On the title screen, shift the view so Steve shows beside the menu card
   if (state.mode === 'title' && window.innerWidth > 900) {
@@ -2340,4 +2670,4 @@ function frame() {
 frame();
 
 // Handy for debugging / automated screenshots
-window.__steve = { state, T, keys, startShift, world, renderer };
+window.__steve = { state, T, keys, startShift, world, renderer, geese };

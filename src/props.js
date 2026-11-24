@@ -30,6 +30,11 @@ export class PropBatch {
     this.count = 0;
   }
 
+  reset() {
+    this.count = 0;
+    for (const m of this.meshes) m.count = 0;
+  }
+
   add() {
     const i = this.count++;
     for (const m of this.meshes) m.count = this.count;

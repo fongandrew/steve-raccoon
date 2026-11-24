@@ -416,3 +416,11 @@ p.small {
     max-width: 500px;
   }
 }
+
+#review {
+  font-style: italic;
+  color: #6b6f78;
+  font-size: 15px;
+  margin: 0 auto 16px;
+  max-width: 420px;
+}
