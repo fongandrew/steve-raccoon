@@ -8,7 +8,7 @@ import { burst, leafBurst } from './particles.js';
 import { truck, world } from './scene.js';
 import { fellTree } from './smash.js';
 import { addScore, state, T } from './state.js';
-import { boostLevel } from './util.js';
+import { boostLevel, pick } from './util.js';
 import { groundHeight, HALF, isOnLawn, PITCH, roadCenter } from './world.js';
 
 const tmpV2 = new THREE.Vector3();
@@ -150,11 +150,11 @@ export function updateTruck(dt) {
 				popup(`AIR TIME! +${pts}`, truck.group.position, 'fun');
 				if (T.airTime > 0.9)
 					toast(
-						[
+						pick([
 							'Steve has achieved liftoff.',
 							'The neighbors are filming.',
 							'Trash truck physics: optional.',
-						][(Math.random() * 3) | 0],
+						]),
 					);
 			}
 			T.vy = 0;
@@ -274,11 +274,7 @@ export function bonk(strength) {
 	T.squashV -= Math.min(5, strength * 0.25);
 	state.shake = Math.max(state.shake, Math.min(0.8, strength * 0.04));
 	if (strength > 10 && state.mode === 'playing') {
-		popup(
-			['BONK!', 'OOF!', 'WHOMP!', 'CLONK!'][(Math.random() * 4) | 0],
-			truck.group.position,
-			'bad',
-		);
+		popup(pick(['BONK!', 'OOF!', 'WHOMP!', 'CLONK!']), truck.group.position, 'bad');
 		narrate('crash', 0.5);
 	}
 }

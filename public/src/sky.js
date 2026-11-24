@@ -1,3 +1,5 @@
+// Sky dome, sun and hemisphere light, clouds and horizon hills, the day-to-dusk
+// colour cycle, and ambient motion (flags, fountains, seagulls, ducks).
 import * as THREE from '../vendor/three.module.js';
 import { makeCloud, nightMats } from './models.js';
 import { spawnParticle } from './particles.js';
@@ -45,8 +47,13 @@ scene.add(sky);
 // Puffy clouds drifting overhead and low hills on the horizon. These use
 // unlit materials with baked "faux light" vertex colors so they don't pick up
 // the green bounce light from the ground.
+/**
+ * @param {THREE.BufferGeometry} geo
+ * @param {number} lo brightness facing away from the light
+ * @param {number} hi brightness facing it
+ */
 function fauxShade(geo, lo, hi) {
-	const n = geo.attributes.normal;
+	const n = /** @type {THREE.BufferAttribute} */ (geo.attributes.normal);
 	const col = new Float32Array(n.count * 3);
 	const L = new THREE.Vector3(0.4, 1, 0.3).normalize();
 	for (let i = 0; i < n.count; i++) {
@@ -61,7 +68,10 @@ const clouds = new THREE.Group();
 	const r = rng(99);
 	for (let i = 0; i < 16; i++) {
 		const c = makeCloud(r, cloudMat);
-		c.traverse((m) => m.isMesh && fauxShade(m.geometry, 0.86, 1.0));
+		c.traverse((o) => {
+			const m = /** @type {THREE.Mesh} */ (o);
+			return m.isMesh && fauxShade(m.geometry, 0.86, 1.0);
+		});
 		const a = (i / 16) * Math.PI * 2 + r() * 0.3;
 		const d = 140 + r() * 260;
 		c.position.set(Math.cos(a) * d, 70 + r() * 50, Math.sin(a) * d);
@@ -98,35 +108,40 @@ sun.shadow.bias = -0.0005;
 sun.shadow.normalBias = 0.05;
 scene.add(sun, sun.target);
 
+/** @typedef {[number, THREE.Color, THREE.Color, THREE.Color, number]} SkyKey */
+
 // [t, sky top, horizon, sunlight color, sun intensity]
-const SKY_KEYS = [
-	[0, 0x7fb6e8, 0xffd2a8, 0xffd8b0, 1.5],
-	[0.15, 0x5aaeef, 0xc4e6fb, 0xfff6e6, 2.2],
-	[0.6, 0x4ea6ec, 0xbfe3fa, 0xffffff, 2.3],
-	[0.82, 0x6f9fd8, 0xffcf9f, 0xffd9a8, 1.9],
-	[1, 0x6a6fb8, 0xff9e7a, 0xff9f70, 1.25],
-].map(([t, top, hor, light, k]) => [
-	t,
-	new THREE.Color(top),
-	new THREE.Color(hor),
-	new THREE.Color(light),
-	k,
-]);
+const SKY_KEYS = /** @type {SkyKey[]} */ (
+	[
+		[0, 0x7fb6e8, 0xffd2a8, 0xffd8b0, 1.5],
+		[0.15, 0x5aaeef, 0xc4e6fb, 0xfff6e6, 2.2],
+		[0.6, 0x4ea6ec, 0xbfe3fa, 0xffffff, 2.3],
+		[0.82, 0x6f9fd8, 0xffcf9f, 0xffd9a8, 1.9],
+		[1, 0x6a6fb8, 0xff9e7a, 0xff9f70, 1.25],
+	].map(([t, top, hor, light, k]) => [
+		t,
+		new THREE.Color(top),
+		new THREE.Color(hor),
+		new THREE.Color(light),
+		k,
+	])
+);
 const sunCol = new THREE.Color();
 const topCol = new THREE.Color();
 const cloudDay = new THREE.Color(0xffffff);
 const cloudDusk = new THREE.Color(0xffc6b0);
 
+/** @param {number} t how far through the day, 0 (dawn) to 1 (dusk) */
 export function updateSky(t) {
 	let i = 0;
-	while (i < SKY_KEYS.length - 2 && t > SKY_KEYS[i + 1][0]) i++;
-	const [t0, top0, hor0, l0, k0] = SKY_KEYS[i];
-	const [t1, top1, hor1, l1, k1] = SKY_KEYS[i + 1];
+	while (i < SKY_KEYS.length - 2 && t > /** @type {SkyKey} */ (SKY_KEYS[i + 1])[0]) i++;
+	const [t0, top0, hor0, l0, k0] = /** @type {SkyKey} */ (SKY_KEYS[i]);
+	const [t1, top1, hor1, l1, k1] = /** @type {SkyKey} */ (SKY_KEYS[i + 1]);
 	const f = Math.max(0, Math.min(1, (t - t0) / (t1 - t0)));
 	skyColor.copy(hor0).lerp(hor1, f);
 	topCol.copy(top0).lerp(top1, f);
 	skyUniforms.top.value.copy(topCol);
-	scene.fog.color.copy(skyColor);
+	/** @type {THREE.Fog} */ (scene.fog).color.copy(skyColor);
 	sunCol.copy(l0).lerp(l1, f);
 	sun.color.copy(sunCol);
 	sun.intensity = k0 + (k1 - k0) * f;
@@ -150,6 +165,10 @@ export function updateSky(t) {
 }
 
 let fountainT = 0;
+/**
+ * @param {number} dt
+ * @param {number} time seconds since boot
+ */
 export function updateAmbient(dt, time) {
 	for (const f of world.flags) f.rotation.y = Math.sin(time * 1.7) * 0.35;
 	clouds.rotation.y = time * 0.004;
@@ -182,8 +201,8 @@ export function updateAmbient(dt, time) {
 		g.group.rotation.y = -a;
 		g.group.rotation.z = 0.25;
 		const flap = Math.sin(time * 10 + u.phase) * 0.5;
-		g.wings[0].rotation.z = flap;
-		g.wings[1].rotation.z = -flap;
+		/** @type {THREE.Group} */ (g.wings[0]).rotation.z = flap;
+		/** @type {THREE.Group} */ (g.wings[1]).rotation.z = -flap;
 	}
 	for (const d of world.ducks || []) {
 		const u = d.userData.duck;

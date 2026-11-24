@@ -1,3 +1,5 @@
+// The chase camera behind the truck (plus the title-screen orbit and a
+// photo-mode override for screenshot scripts).
 import * as THREE from '../vendor/three.module.js';
 import { camera } from './scene.js';
 import { state, T } from './state.js';
@@ -6,7 +8,14 @@ const tmpV = new THREE.Vector3();
 const tmpV2 = new THREE.Vector3();
 
 let camHeading = 0;
-/** @type {{ pos: number[], look: number[], fov?: number } | null} */
+/**
+ * @typedef {object} CameraOverride
+ * @property {[number, number, number]} pos
+ * @property {[number, number, number]} look
+ * @property {number} [fov]
+ */
+
+/** @type {CameraOverride | null} */
 let override = null;
 
 /** Snap the chase camera back behind the truck (new shift). */
@@ -14,12 +23,20 @@ export function resetCamera() {
 	camHeading = 0;
 }
 
-/** Debug / photo-mode camera used by screenshot scripts; `null` hands it back. */
+/**
+ * Debug / photo-mode camera used by screenshot scripts; `null` hands it back.
+ *
+ * @param {CameraOverride | null} o
+ */
 export function setCameraOverride(o) {
 	override = o;
 }
 
 const camLook = new THREE.Vector3();
+/**
+ * @param {number} dt
+ * @param {number} time seconds since boot (drives the title orbit)
+ */
 export function updateCamera(dt, time) {
 	const o = override;
 	if (o) {

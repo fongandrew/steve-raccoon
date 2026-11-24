@@ -1,3 +1,5 @@
+// Entry point: wires every system into `update(dt)` / `render()`, runs the
+// frame loop and installs the `window.__game` test hook.
 import { audio } from './audio.js';
 import { updateBalls } from './balls.js';
 import { setCameraOverride, updateCamera } from './camera.js';
@@ -122,7 +124,7 @@ export function start() {
 
 	// Test/debug hook: read state, drive deterministic scenarios. Playwright
 	// specs and screenshot scripts go through this, never through pixels.
-	window.__game = {
+	/** @type {any} */ (window).__game = {
 		state,
 		T,
 		keys,
@@ -134,7 +136,13 @@ export function start() {
 		startShift,
 		endShift,
 		setPaused,
-		/** Put the truck somewhere, stopped. `heading` is in radians (0 = +z). */
+		/**
+		 * Put the truck somewhere, stopped. `heading` is in radians (0 = +z).
+		 *
+		 * @param {number} x
+		 * @param {number} z
+		 * @param {number} [heading]
+		 */
 		teleport: (x, z, heading = T.heading) => {
 			T.pos.set(x, 0, z);
 			T.vel.set(0, 0, 0);
@@ -143,18 +151,28 @@ export function start() {
 			T.vy = 0;
 			T.grounded = true;
 		},
-		/** Jump the shift clock (seconds into the shift), e.g. to Golden Hour. */
+		/**
+		 * Jump the shift clock (seconds into the shift), e.g. to Golden Hour.
+		 *
+		 * @param {number} t
+		 */
 		skipTo: (t) => {
 			state.time = t;
 		},
 		/**
 		 * Run the game forward `seconds` in fixed 60 Hz steps without drawing,
 		 * so a spec doesn't depend on how fast the machine renders.
+		 *
+		 * @param {number} seconds
 		 */
 		tick: (seconds) => {
 			for (let t = 0; t < seconds - 1e-9; t += 1 / 60) update(1 / 60);
 		},
-		/** Stop (or resume) drawing frames; the simulation keeps running either way. */
+		/**
+		 * Stop (or resume) drawing frames; the simulation keeps running either way.
+		 *
+		 * @param {boolean} on
+		 */
 		setRendering: (on) => {
 			drawing = on;
 		},

@@ -1,3 +1,5 @@
+// The guide arrow floating ahead of the truck, pointing at the nearest thing
+// worth driving to (a can, a dumpster, or the dump once the truck is full).
 import * as THREE from '../vendor/three.module.js';
 import { CAPACITY, DUMPSTER_BAGS } from './constants.js';
 import { toon } from './models.js';
@@ -31,9 +33,11 @@ const guideMat = toon(0x7cf3a0, { emissive: 0x7cf3a0, emissiveIntensity: 0.45 })
 }
 scene.add(guide);
 
+/** @param {number} time seconds since boot (drives the bob) */
 export function updateGuide(time) {
+	/** @type {number | undefined} */
 	let tx;
-	let tz;
+	let tz = 0; // only read once `tx` is set, and they are always set together
 	let col = 0x7cf3a0;
 	if (
 		state.load >= CAPACITY ||

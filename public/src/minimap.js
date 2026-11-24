@@ -1,3 +1,5 @@
+// The corner minimap: the town is painted once into an offscreen canvas, then
+// the dump, waiting cans, dumpsters and the truck are drawn over it each frame.
 import * as THREE from '../vendor/three.module.js';
 import { CAPACITY } from './constants.js';
 import { $ } from './hud.js';
@@ -5,9 +7,16 @@ import { world } from './scene.js';
 import { state, T } from './state.js';
 import { BLOCK, HALF, N, ROAD, roadCenter } from './world.js';
 
-const mini = $('minimap');
-const mctx = mini.getContext('2d');
+const mini = /** @type {HTMLCanvasElement} */ ($('minimap'));
+const mctx = /** @type {CanvasRenderingContext2D} */ (mini.getContext('2d'));
 const MAP_R = HALF + 6;
+/**
+ * World (x, z) to minimap pixels.
+ *
+ * @param {number} x
+ * @param {number} z
+ * @returns {[number, number]}
+ */
 const toMap = (x, z) => [
 	((-x + MAP_R) / (2 * MAP_R)) * mini.width,
 	((-z + MAP_R) / (2 * MAP_R)) * mini.height,
@@ -17,7 +26,7 @@ const mapBg = document.createElement('canvas');
 mapBg.width = mini.width;
 mapBg.height = mini.height;
 (() => {
-	const g = mapBg.getContext('2d');
+	const g = /** @type {CanvasRenderingContext2D} */ (mapBg.getContext('2d'));
 	const s = mapBg.width / (2 * MAP_R);
 	g.fillStyle = '#8fd16a';
 	g.fillRect(0, 0, mapBg.width, mapBg.height);
@@ -40,13 +49,27 @@ mapBg.height = mini.height;
 		g.stroke();
 	}
 	g.setLineDash([]);
+	/** @type {Partial<Record<import('./world.js').BlockType, string>>} */
 	const lawn = { houses: '#8fd16a', park: '#7cc85c', plaza: '#e8dcc0', dump: '#b39a72' };
+	/**
+	 * @param {number} x0
+	 * @param {number} z0
+	 * @param {number} x1
+	 * @param {number} z1
+	 * @param {string | undefined} col no colour leaves the last fill style in place
+	 */
 	const rect = (x0, z0, x1, z1, col) => {
 		const [px0, py0] = toMap(x1, z1);
 		const [px1, py1] = toMap(x0, z0);
-		g.fillStyle = col;
+		g.fillStyle = /** @type {string} */ (col);
 		g.fillRect(px0, py0, px1 - px0, py1 - py0);
 	};
+	/**
+	 * @param {number} x
+	 * @param {number} z
+	 * @param {number} r
+	 * @param {string} col
+	 */
 	const dot = (x, z, r, col) => {
 		const [px, py] = toMap(x, z);
 		g.fillStyle = col;
@@ -92,6 +115,7 @@ mapBg.height = mini.height;
 	}
 })();
 
+/** @param {number} time seconds, for the blinking dump marker */
 export function drawMinimap(time) {
 	mctx.drawImage(mapBg, 0, 0);
 	// dump

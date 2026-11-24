@@ -1,3 +1,5 @@
+// Shift lifecycle and the screens around it: reset the town, start, pause and
+// end a shift, and fill in the results card.
 import { audio } from './audio.js';
 import { resetBalls } from './balls.js';
 import { resetCamera } from './camera.js';
@@ -98,6 +100,7 @@ export function endShift() {
 	showBest();
 }
 
+/** @param {boolean} p */
 export function setPaused(p) {
 	if (p && state.mode === 'playing') {
 		state.mode = 'paused';

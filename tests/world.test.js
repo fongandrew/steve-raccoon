@@ -1,6 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import * as THREE from '../public/vendor/three.module.js';
 import {
 	BLOCK,
 	blockCenter,
@@ -16,6 +15,7 @@ import {
 	surfaceHeight,
 	WALK_Y,
 } from '../public/src/world.js';
+import * as THREE from '../public/vendor/three.module.js';
 import { stubCanvas } from './helpers.js';
 
 /** @type {ReturnType<typeof buildWorld>} */

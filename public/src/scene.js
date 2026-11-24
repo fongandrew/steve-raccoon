@@ -1,8 +1,10 @@
+// The renderer, scene, camera, town (`world`) and truck model, created once at
+// import. Needs a real DOM and WebGL, so unit tests can't import this.
 import * as THREE from '../vendor/three.module.js';
 import { makeTruck } from './models.js';
 import { buildWorld } from './world.js';
 
-const container = document.getElementById('game');
+const container = /** @type {HTMLElement} */ (document.getElementById('game'));
 export const renderer = new THREE.WebGLRenderer({
 	antialias: true,
 	powerPreference: 'high-performance',

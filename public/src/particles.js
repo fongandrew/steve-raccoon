@@ -1,11 +1,52 @@
+// A small pool of unlit box/sphere particles: dust, sparks, leaves, splashes.
 import * as THREE from '../vendor/three.module.js';
 import { audio } from './audio.js';
 import { scene } from './scene.js';
 
+/**
+ * One pooled particle. Free for reuse once `life` runs out.
+ *
+ * @typedef {object} Particle
+ * @property {THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>} mesh
+ * @property {THREE.Vector3} vel
+ * @property {number} life seconds left
+ * @property {number} maxLife
+ * @property {number} grav
+ * @property {number} grow how much it swells over its life (0 = not at all)
+ * @property {number} size
+ * @property {number} drag
+ * @property {number} alpha
+ */
+
+/**
+ * @typedef {object} ParticleOptions
+ * @property {THREE.Vector3} pos copied
+ * @property {THREE.Vector3} vel copied
+ * @property {number | undefined} [color]
+ * @property {number} [size]
+ * @property {number} [life] seconds
+ * @property {number} [grav]
+ * @property {number} [grow]
+ * @property {boolean} [sphere] a ball instead of a box
+ * @property {number} [drag]
+ * @property {number} [alpha]
+ */
+
+/**
+ * @typedef {object} BurstExtras
+ * @property {number} [speed] outward speed
+ * @property {number} [up] upward speed
+ * @property {number[]} [colors] each particle picks one at random (instead of `color`)
+ */
+
+/** @typedef {Omit<ParticleOptions, 'pos' | 'vel'> & BurstExtras} BurstOptions */
+
+/** @type {Particle[]} */
 const particles = [];
 const pGeoBox = new THREE.BoxGeometry(1, 1, 1);
 const pGeoSphere = new THREE.IcosahedronGeometry(0.5, 1);
 
+/** @param {ParticleOptions} options */
 export function spawnParticle({
 	pos,
 	vel,
@@ -21,9 +62,10 @@ export function spawnParticle({
 	let p = particles.find((q) => q.life <= 0);
 	if (!p) {
 		if (particles.length > 400) return;
+		/** @type {Particle['mesh']} */
 		const mesh = new THREE.Mesh(pGeoBox, new THREE.MeshBasicMaterial({ transparent: true }));
 		scene.add(mesh);
-		p = { mesh, vel: new THREE.Vector3(), life: 0 };
+		p = /** @type {Particle} */ ({ mesh, vel: new THREE.Vector3(), life: 0 });
 		particles.push(p);
 	}
 	p.mesh.geometry = sphere ? pGeoSphere : pGeoBox;
@@ -37,6 +79,7 @@ export function spawnParticle({
 	Object.assign(p, { life, maxLife: life, grav, grow, size, drag, alpha });
 }
 
+/** @param {number} dt */
 export function updateParticles(dt) {
 	for (const p of particles) {
 		if (p.life <= 0) continue;
@@ -59,6 +102,13 @@ export function updateParticles(dt) {
 	}
 }
 
+/**
+ * Throw `n` particles up and outward from one point.
+ *
+ * @param {THREE.Vector3} pos
+ * @param {number} n
+ * @param {BurstOptions} opts
+ */
 export function burst(pos, n, opts) {
 	for (let i = 0; i < n; i++) {
 		const a = Math.random() * Math.PI * 2;
@@ -77,6 +127,14 @@ export function burst(pos, n, opts) {
 }
 
 const LEAF_COLORS = [0x5cc96b, 0x48b85a, 0x7bd67a, 0x3fa65a];
+/**
+ * A puff of leaves (with a rustle) around a point.
+ *
+ * @param {number} x
+ * @param {number} z
+ * @param {number} y
+ * @param {number} n
+ */
 export function leafBurst(x, z, y, n) {
 	for (let i = 0; i < n; i++) {
 		spawnParticle({

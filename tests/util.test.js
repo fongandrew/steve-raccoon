@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { boostLevel, cap, ease, fmtCountdown, timeline, wrapAngle } from '../public/src/util.js';
+import {
+	boostLevel,
+	cap,
+	ease,
+	fmtCountdown,
+	pick,
+	timeline,
+	wrapAngle,
+} from '../public/src/util.js';
+import { withRandom } from './helpers.js';
 
 describe('ease', () => {
 	it('runs 0 → 1 through the midpoint, symmetrically', () => {
@@ -62,5 +71,14 @@ describe('timeline', () => {
 		expect(tl.phase(0.25, 'grip')).toBe(0); // not started
 		expect(tl.phase(0.625, 'grip')).toBe(0.5);
 		expect(tl.phase(9, 'lift')).toBe(1); // long finished
+	});
+});
+
+describe('pick', () => {
+	it('covers the whole list and nothing past it', () => {
+		const list = ['a', 'b', 'c'];
+		expect(withRandom([0], () => pick(list))).toBe('a');
+		expect(withRandom([0.5], () => pick(list))).toBe('b');
+		expect(withRandom([0.999], () => pick(list))).toBe('c');
 	});
 });

@@ -1,3 +1,5 @@
+// Steve's portrait in the HUD: a second render of the scene through a camera
+// in front of his face, scissored to the portrait element, plus his mood label.
 import * as THREE from '../vendor/three.module.js';
 import { $ } from './hud.js';
 import { renderer, scene, steve, truck } from './scene.js';
@@ -10,6 +12,8 @@ const faceCam = new THREE.PerspectiveCamera(40, 1, 0.05, 60);
 const portraitEl = $('portrait');
 const _fp = new THREE.Vector3();
 const _fh = new THREE.Vector3();
+/** @typedef {'chomp' | 'hangry' | 'hungry' | 'zoom' | 'hic' | 'happy' | 'peckish'} Mood */
+
 let lastMood = '';
 export function renderPortrait() {
 	const r = portraitEl.getBoundingClientRect();
@@ -43,6 +47,7 @@ export function renderPortrait() {
 	renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
 
 	// Mood frame + label
+	/** @type {Mood} */
 	let mood;
 	if (state.chompT > 0) mood = 'chomp';
 	else if (state.hangry) mood = 'hangry';
@@ -53,6 +58,7 @@ export function renderPortrait() {
 	if (mood !== lastMood) {
 		lastMood = mood;
 		portraitEl.className = mood;
+		/** @type {Record<Mood, [string, string]>} */
 		const M = {
 			chomp: ['😋', 'nom nom'],
 			hangry: ['💢', 'HANGRY! feed me'],

@@ -68,3 +68,12 @@ export function timeline(durations) {
 		phase: (time, k) => Math.max(0, Math.min(1, (time - start[k]) / durations[k])),
 	};
 }
+
+/**
+ * A random element of a non-empty list.
+ *
+ * @template T
+ * @param {readonly T[]} list
+ * @returns {T}
+ */
+export const pick = (list) => /** @type {T} */ (list[(Math.random() * list.length) | 0]);

@@ -1,3 +1,5 @@
+// The DOM heads-up display: score/clock/load readouts, floating score popups
+// that track a point in the world, and the narrator's toasts.
 import * as THREE from '../vendor/three.module.js';
 import { CAPACITY, SHIFT } from './constants.js';
 import { pickLine } from './lines.js';
@@ -7,7 +9,13 @@ import { boostLevel, fmtCountdown } from './util.js';
 
 const tmpV = new THREE.Vector3();
 
-export const $ = (id) => document.getElementById(id);
+/**
+ * Look up an element that index.html is known to contain.
+ *
+ * @param {string} id
+ * @returns {HTMLElement}
+ */
+export const $ = (id) => /** @type {HTMLElement} */ (document.getElementById(id));
 export const hud = {
 	score: $('score'),
 	clock: $('clock'),
@@ -19,8 +27,26 @@ export const hud = {
 	toast: $('toast'),
 	popups: $('popups'),
 };
+/**
+ * A floating label that rises from a point in the world.
+ *
+ * @typedef {object} Popup
+ * @property {HTMLDivElement} el
+ * @property {THREE.Vector3} anchor kept by reference
+ * @property {number} yOff
+ * @property {number} t seconds shown so far
+ * @property {number} life
+ */
+
+/** @type {Popup[]} */
 const popups = [];
 
+/**
+ * @param {string} text
+ * @param {THREE.Vector3} anchor world position to float above
+ * @param {string} [cls] extra CSS class
+ * @param {number} [yOff] extra height above the anchor
+ */
 export function popup(text, anchor, cls = '', yOff = 0) {
 	// Anchor is kept by reference, so popups on the truck ride along with it.
 	const el = document.createElement('div');
@@ -30,9 +56,10 @@ export function popup(text, anchor, cls = '', yOff = 0) {
 	popups.push({ el, anchor, yOff: 2 + yOff, t: 0, life: 1.4 });
 }
 
+/** @param {number} dt */
 export function updatePopups(dt) {
 	for (let i = popups.length - 1; i >= 0; i--) {
-		const p = popups[i];
+		const p = /** @type {Popup} */ (popups[i]);
 		p.t += dt;
 		tmpV.copy(p.anchor);
 		tmpV.y += p.yOff + p.t * 2.5;
@@ -48,17 +75,27 @@ export function updatePopups(dt) {
 	}
 }
 
+/**
+ * @param {string} msg
+ * @param {number} [dur] seconds on screen
+ */
 export function toast(msg, dur = 3.2) {
 	const el = document.createElement('div');
 	el.className = 'toast-msg';
 	el.textContent = msg;
 	hud.toast.appendChild(el);
-	while (hud.toast.children.length > 3) hud.toast.firstChild.remove();
+	while (hud.toast.children.length > 3) /** @type {ChildNode} */ (hud.toast.firstChild).remove();
 	setTimeout(() => (el.style.opacity = '0'), dur * 1000);
 	setTimeout(() => el.remove(), dur * 1000 + 500);
 }
 
-/** Narrate an event. Lines are rate-limited so the narrator doesn't babble. */
+/**
+ * Narrate an event. Lines are rate-limited so the narrator doesn't babble.
+ *
+ * @param {import('./lines.js').LineKind} kind
+ * @param {number} [chance] probability of saying anything at all
+ * @param {boolean} [force] skip the rate limit
+ */
 export function narrate(kind, chance = 1, force = false) {
 	if (state.mode !== 'playing' || Math.random() > chance) return;
 	if (!force && state.time - state.lastNarration < 7) return;
@@ -68,7 +105,7 @@ export function narrate(kind, chance = 1, force = false) {
 }
 
 export function updateHud() {
-	hud.score.textContent = state.score;
+	hud.score.textContent = String(state.score);
 	hud.clock.textContent = fmtCountdown(SHIFT - state.time);
 	hud.clock.style.color = SHIFT - state.time < 30 ? '#e17055' : '';
 	hud.loadText.textContent = `${state.load}/${CAPACITY}`;
@@ -84,6 +121,7 @@ export function updateHud() {
 				: state.hunger > 0
 					? 'HUNGRY'
 					: 'HANGRY';
+	/** @type {string[]} */
 	const st = [];
 	if (state.hangry)
 		st.push(
@@ -95,9 +133,11 @@ export function updateHud() {
 	if (state.boostT > 0) st.push('🔥 BOOST');
 	else if (state.driftCharge > 0.6)
 		st.push(
-			['', '💙 boost ready', '🧡 SUPER boost', '💖 ULTRA boost'][
-				boostLevel(state.driftCharge)
-			],
+			/** @type {string} */ (
+				['', '💙 boost ready', '🧡 SUPER boost', '💖 ULTRA boost'][
+					boostLevel(state.driftCharge)
+				]
+			),
 		);
 	if (state.zoomT > 0) st.push('☕ ZOOMIES');
 	if (state.hicT > 0) st.push('🫧 hiccups');

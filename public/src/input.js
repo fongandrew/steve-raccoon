@@ -1,7 +1,12 @@
+// Player input: held keys (`keys`), this frame's key presses (`pressed`) and the
+// touch thumbstick (`stick`), fed by the keyboard and the on-screen controls.
 import { audio } from './audio.js';
 
+/** @type {Set<string>} */
 export const keys = new Set();
+/** @type {Set<string>} */
 export const pressed = new Set(); // edge-triggered this frame
+/** @type {Record<string, string>} */
 const KEYMAP = {
 	KeyW: 'gas',
 	ArrowUp: 'gas',
@@ -23,7 +28,14 @@ const KEYMAP = {
 };
 // --- Touch: a floating thumbstick on the left, DRIFT + HONK on the right,
 // tap Steve's portrait to snack, pause button for everything else.
-export const stick = { active: false, id: null, ox: 0, oy: 0, x: 0, y: 0 };
+export const stick = {
+	active: false,
+	id: /** @type {number | null} */ (null),
+	ox: 0,
+	oy: 0,
+	x: 0,
+	y: 0,
+};
 function enableTouch() {
 	if (!document.body.classList.contains('touch')) document.body.classList.add('touch');
 }
@@ -46,8 +58,10 @@ export function initInput() {
 	if (window.matchMedia('(pointer: coarse)').matches) enableTouch();
 	window.addEventListener('touchstart', enableTouch, { passive: true });
 
-	for (const btn of document.querySelectorAll('#touch .tbtn')) {
-		const k = btn.dataset.key;
+	const btns = /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll('#touch .tbtn'));
+	for (const btn of btns) {
+		const k = /** @type {string} */ (btn.dataset.key);
+		/** @param {PointerEvent} e */
 		const down = (e) => {
 			e.preventDefault();
 			audio.init();
@@ -56,6 +70,7 @@ export function initInput() {
 			keys.add(k);
 			btn.classList.add('on');
 		};
+		/** @param {PointerEvent} e */
 		const up = (e) => {
 			e.preventDefault();
 			keys.delete(k);
@@ -67,10 +82,11 @@ export function initInput() {
 		btn.addEventListener('pointerleave', up);
 	}
 	{
-		const zone = document.getElementById('stickZone');
-		const ring = document.getElementById('stick');
-		const knob = document.getElementById('knob');
+		const zone = /** @type {HTMLElement} */ (document.getElementById('stickZone'));
+		const ring = /** @type {HTMLElement} */ (document.getElementById('stick'));
+		const knob = /** @type {HTMLElement} */ (document.getElementById('knob'));
 		const R = 50;
+		/** @param {PointerEvent} e */
 		const move = (e) => {
 			if (e.pointerId !== stick.id) return;
 			let dx = e.clientX - stick.ox;
@@ -108,6 +124,7 @@ export function initInput() {
 			ring.classList.add('on');
 		});
 		zone.addEventListener('pointermove', move);
+		/** @param {PointerEvent} e */
 		const end = (e) => {
 			if (e.pointerId !== stick.id) return;
 			Object.assign(stick, { active: false, id: null, x: 0, y: 0 });
@@ -116,7 +133,8 @@ export function initInput() {
 		zone.addEventListener('pointerup', end);
 		zone.addEventListener('pointercancel', end);
 	}
-	document.getElementById('portrait').addEventListener('pointerdown', (e) => {
+	const portrait = /** @type {HTMLElement} */ (document.getElementById('portrait'));
+	portrait.addEventListener('pointerdown', (e) => {
 		e.preventDefault();
 		audio.init();
 		pressed.add('snack');
