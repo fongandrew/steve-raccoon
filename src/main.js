@@ -1,7 +1,7 @@
 // Steve Raccoon: a game about a raccoon, a trash truck, and poor impulse control.
 import * as THREE from 'three';
-import { M, makeTruck, makeBag, makePizza, makeGoose, makeGull, makeCloud, makeArrow } from './models.js';
-import { buildWorld, HALF, onRoad, roadC, blockC, mulberry32 } from './world.js';
+import { M, makeTruck, makeBag, makePizza, makeGoose, makeGull, makeCloud, makeArrow, windowMat } from './models.js';
+import { buildWorld, HALF, P, R, B, onRoad, roadC, blockC, mulberry32 } from './world.js';
 import { Sfx } from './audio.js';
 
 const CAP = 12, SHIFT = 150, MAXSPD = 27, BOOSTSPD = 43;
@@ -19,22 +19,49 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.toneMapping = THREE.NoToneMapping;
 
 const scene = new THREE.Scene();
-const SKY_DAY = new THREE.Color(0x8fd3ff), SKY_DUSK = new THREE.Color(0xffb38a);
-const SUN_DAY = new THREE.Color(0xfff4dd), SUN_DUSK = new THREE.Color(0xffa066);
-scene.background = SKY_DAY.clone();
-scene.fog = new THREE.Fog(SKY_DAY.clone(), 130, 430);
+// sky: [zenith, horizon] by day and at dusk
+const SKY_DAY = [new THREE.Color(0x3d9df0), new THREE.Color(0xb9e4ff)];
+const SKY_DUSK = [new THREE.Color(0x5b5fa8), new THREE.Color(0xffb38a)];
+const SUN_DAY = new THREE.Color(0xfff1d6), SUN_DUSK = new THREE.Color(0xff9a5c);
+scene.background = SKY_DAY[1].clone();
+scene.fog = new THREE.Fog(SKY_DAY[1].clone(), 140, 460);
 
-const camera = new THREE.PerspectiveCamera(60, 1, 0.5, 900);
-const hemi = new THREE.HemisphereLight(0xdff3ff, 0x9fcf8a, 1.5);
+const camera = new THREE.PerspectiveCamera(60, 1, 1, 1100);
+
+const skyMat = new THREE.ShaderMaterial({
+  side: THREE.BackSide, depthWrite: false, fog: false,
+  uniforms: { top: { value: SKY_DAY[0].clone() }, horizon: { value: SKY_DAY[1].clone() } },
+  vertexShader: 'varying vec3 vDir; void main() { vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `uniform vec3 top; uniform vec3 horizon; varying vec3 vDir;
+    void main() {
+      float h = clamp(vDir.y * 1.15, 0.0, 1.0);
+      gl_FragColor = vec4(mix(horizon, top, pow(h, 0.6)), 1.0);
+      #include <colorspace_fragment>
+    }`,
+});
+const sky = new THREE.Mesh(new THREE.SphereGeometry(900, 24, 12), skyMat);
+sky.renderOrder = -10;
+scene.add(sky);
+const sunDisc = new THREE.Group();
+{
+  const mk = (r, o) => new THREE.Mesh(new THREE.CircleGeometry(r, 32), new THREE.MeshBasicMaterial({ color: 0xfff6d0, transparent: true, opacity: o, fog: false, depthWrite: false }));
+  sunDisc.add(mk(70, 0.12), mk(48, 0.2), mk(30, 1));
+  sunDisc.renderOrder = -9;
+  scene.add(sunDisc);
+}
+
+const hemi = new THREE.HemisphereLight(0xd4ebff, 0xb3a58c, 1.25);
 scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xfff4dd, 2.4);
+const sun = new THREE.DirectionalLight(0xfff1d6, 2.8);
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
-Object.assign(sun.shadow.camera, { left: -60, right: 60, top: 60, bottom: -60, near: 1, far: 220 });
-sun.shadow.bias = -0.0006;
-sun.shadow.normalBias = 0.4;
+const coarse = matchMedia('(pointer: coarse)').matches;
+sun.shadow.mapSize.setScalar(coarse ? 2048 : 4096);
+Object.assign(sun.shadow.camera, { left: -55, right: 55, top: 55, bottom: -55, near: 1, far: 260 });
+sun.shadow.bias = -0.0004;
+sun.shadow.normalBias = 0.25;
 scene.add(sun, sun.target);
 
 const world = buildWorld(scene);
@@ -65,6 +92,7 @@ const clouds = [];
 const gulls = [];
 for (let i = 0; i < 5; i++) {
   const g = makeGull();
+  g.traverse(o => { o.castShadow = false; });
   scene.add(g);
   gulls.push({ g, a: i * 1.3, r: 7 + i * 2, h: 15 + (i % 3) * 2.5, s: 0.5 + i * 0.07 });
 }
@@ -93,6 +121,7 @@ const fountains = [];
 // ------------------------------------------------------------------ particles
 const PMAX = 280;
 const pGeo = new THREE.BoxGeometry(1, 1, 1);
+const pRound = new THREE.SphereGeometry(0.6, 10, 8);
 const parts = [];
 for (let i = 0; i < PMAX; i++) {
   const m = new THREE.Mesh(pGeo, M(0xffffff));
@@ -101,9 +130,10 @@ for (let i = 0; i < PMAX; i++) {
   parts.push({ m, vel: new THREE.Vector3(), life: 0, max: 1, size: 1, grav: 20, spin: 0 });
 }
 let pIdx = 0;
-function puff(x, y, z, vx, vy, vz, color, size = 0.4, life = 0.7, grav = 20) {
+function puff(x, y, z, vx, vy, vz, color, size = 0.4, life = 0.7, grav = 20, round = false, glow = false) {
   const p = parts[pIdx = (pIdx + 1) % PMAX];
-  p.m.material = M(color);
+  p.m.material = M(color, glow ? { flatShading: false, emissive: color, emissiveIntensity: 0.9 } : round ? { flatShading: false } : undefined);
+  p.m.geometry = round ? pRound : pGeo;
   p.m.position.set(x, y, z);
   p.m.rotation.set(rand(3), rand(3), rand(3));
   p.m.visible = true;
@@ -168,7 +198,7 @@ function popup(text, pos, cls = '') {
   el.className = 'pop ' + cls;
   el.textContent = text;
   popupsEl.appendChild(el);
-  popups.push({ el, pos: pos.clone(), t: 0 });
+  popups.push({ el, pos: pos.clone(), t: 0, off: popups.filter(o => o.t < 0.6).length * 34 });
 }
 function project(v) {
   tmpV.copy(v).project(camera);
@@ -268,7 +298,7 @@ function endShift() {
   else review = 'Surprisingly adequate. Suspicious.';
   $('review').textContent = `"${review}" - Brenda (possum), Regional Manager`;
   $('best').textContent = '$' + best;
-  setTimeout(() => { if (game.state === 'over') $('report').classList.remove('hidden'); }, 900);
+  setTimeout(() => { if (game.state === 'over') { $('report').classList.remove('hidden'); $('hud').classList.add('hidden'); } }, 900);
   $('touch').classList.add('hidden');
 }
 
@@ -385,7 +415,10 @@ function updateTruck(dt) {
   const accel = (truck.speed - truck.lastSpeed) / Math.max(dt, 1e-3);
   truck.lastSpeed = truck.speed;
   truck.pitch = lerp(truck.pitch, clamp(-accel * 0.0035, -0.09, 0.09), Math.min(1, dt * 6));
-  truck.y = lerp(truck.y, onRoad(truck.pos.x, truck.pos.z) ? 0 : inDump ? 0.2 : 0.3, Math.min(1, dt * 12));
+  const bl = v => Math.abs((((v + HALF) % P) + P) % P - R - B / 2);
+  const onPave = Math.max(bl(truck.pos.x), bl(truck.pos.z)) > 19;
+  truck.y = lerp(truck.y, onRoad(truck.pos.x, truck.pos.z) ? 0 : inDump ? 0.2 : onPave ? 0.24 : 0.3, Math.min(1, dt * 12));
+  truck.beaconMat.emissiveIntensity = Math.sin(game.t * 9) > 0 ? 1.6 : 0.15;
   truck.group.position.set(truck.pos.x, truck.y, truck.pos.z);
   truck.group.rotation.y = truck.heading;
   truck.body.rotation.z = truck.steer * ratio * 0.13;
@@ -419,17 +452,17 @@ function updateTruck(dt) {
   // exhaust, boost and dust
   if (Math.random() < dt * (6 + Math.abs(ratio) * 14)) {
     tmpV2.set(-1.25, 5.2, 1.15).applyMatrix4(truck.group.matrixWorld);
-    puff(tmpV2.x, tmpV2.y, tmpV2.z, rand(-0.5, 0.5), 2.5, rand(-0.5, 0.5), 0xe4e4e4, 0.26, 0.5, -2);
+    puff(tmpV2.x, tmpV2.y, tmpV2.z, rand(-0.5, 0.5), 2.5, rand(-0.5, 0.5), 0xf0f0f0, 0.3, 0.55, -2, true);
   }
   if (boosting) {
-    for (let i = 0; i < 2; i++) {
-      tmpV2.set(rand(-1.2, 1.2), 1.2, -4).applyMatrix4(truck.group.matrixWorld);
-      puff(tmpV2.x, tmpV2.y, tmpV2.z, -fwd.x * 6 + rand(-2, 2), rand(1, 4), -fwd.z * 6 + rand(-2, 2), pick([0xb6f25c, 0xf7d154, 0xff8a3c]), 0.6, 0.5, -3);
+    for (let i = 0; i < 3; i++) {
+      tmpV2.set(rand(-1.2, 1.2), 1.0, -4.4).applyMatrix4(truck.group.matrixWorld);
+      puff(tmpV2.x, tmpV2.y, tmpV2.z, -fwd.x * 6 + rand(-2, 2), rand(1, 4), -fwd.z * 6 + rand(-2, 2), pick([0xfff2a8, 0xf7d154, 0xff8a3c, 0xff5a3c]), rand(0.22, 0.42), 0.32, -4, true, true);
     }
   }
   if (offroad && Math.abs(truck.speed) > 8 && Math.random() < dt * 30) {
     tmpV2.set(rand(-1.4, 1.4), 0.3, -3).applyMatrix4(truck.group.matrixWorld);
-    puff(tmpV2.x, tmpV2.y, tmpV2.z, rand(-2, 2), rand(2, 5), rand(-2, 2), pick([0x7cc96b, 0x9a7b4f, 0x63c26a]), 0.35, 0.6);
+    puff(tmpV2.x, tmpV2.y, tmpV2.z, rand(-2, 2), rand(2, 5), rand(-2, 2), pick([0x7cc96b, 0x9a7b4f, 0x63c26a]), 0.3, 0.6, 20, true);
   }
   sfx.setEngine(ratio + (boosting ? 0.5 : 0), game.state === 'playing');
 }
@@ -532,7 +565,7 @@ function updateDump(dt) {
   if (inPad && !game.inPad) { game.visitFull = game.load >= CAP; game.visitCount = 0; }
   game.inPad = inPad;
   d.padMesh.scale.setScalar(1 + Math.sin(game.t * 5) * 0.03);
-  if (inPad && game.load > 0 && game.state === 'playing' && Math.abs(truck.speed) < 16) {
+  if (inPad && game.load > 0 && game.state === 'playing' && Math.abs(truck.speed) < 20) {
     game.unloadT -= dt;
     while (game.unloadT <= 0 && game.load > 0) {
       game.unloadT += 0.11;
@@ -676,7 +709,7 @@ function updateProps(dt) {
   for (let i = fountains.length - 1; i >= 0; i--) {
     const f = fountains[i];
     f.t -= dt;
-    for (let k = 0; k < 2; k++) puff(f.pos.x, 0.5, f.pos.z, rand(-1.6, 1.6), rand(11, 16) * Math.min(1, f.t / 2), rand(-1.6, 1.6), pick([0x8fd6ff, 0xc9ecff, 0x5fb8f0]), 0.35, 1.1, 22);
+    for (let k = 0; k < 2; k++) puff(f.pos.x, 0.5, f.pos.z, rand(-1.6, 1.6), rand(11, 16) * Math.min(1, f.t / 2), rand(-1.6, 1.6), pick([0x8fd6ff, 0xc9ecff, 0x5fb8f0]), 0.32, 1.1, 22, true);
     if (f.t <= 0) fountains.splice(i, 1);
   }
 }
@@ -741,6 +774,7 @@ function updateParticles(dt) {
 
 // ------------------------------------------------------------------ camera
 let camYaw = Math.PI;
+const sunDir = new THREE.Vector3(0.5, 0.7, 0.4).normalize();
 const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
 function updateCamera(dt, snap) {
   const portrait = clamp(1.25 / camera.aspect, 1, 1.9);
@@ -786,7 +820,7 @@ function drawMap() {
   g.fillStyle = '#8d9078'; g.beginPath(); g.arc(mp(d.pilePos.x), mp(d.pilePos.z), 10 * MS, 0, 6.3); g.fill();
   const pulse = game.load >= CAP * 0.75 ? 1 + Math.sin(game.t * 8) * 0.3 : 1;
   g.fillStyle = '#ffe066'; g.strokeStyle = '#e2543d'; g.lineWidth = 4;
-  g.beginPath(); g.arc(mp(d.pad.x), mp(d.pad.z), 7 * MS * pulse, 0, 6.3); g.fill(); g.stroke();
+  g.beginPath(); g.arc(mp(d.pad.x), mp(d.pad.z), 8 * MS * pulse, 0, 6.3); g.fill(); g.stroke();
   for (const b of world.bins) {
     if (!b.full) continue;
     g.fillStyle = b.type === 'bin' ? '#1f7a1f' : '#1c5fd0';
@@ -840,7 +874,7 @@ function updateHud(dt) {
     if (p.t > 1.3) { p.el.remove(); popups.splice(i, 1); continue; }
     const s = project(p.pos);
     const sc = Math.min(1, p.t * 8);
-    p.el.style.transform = `translate(${s.x}px, ${s.y - p.t * 60}px) translate(-50%, -50%) scale(${sc})`;
+    p.el.style.transform = `translate(${s.x}px, ${s.y - p.t * 60 - p.off}px) translate(-50%, -50%) scale(${sc})`;
     p.el.style.opacity = s.ok ? Math.min(1, (1.3 - p.t) * 3) : 0;
   }
   if (++mapTick % 4 === 0) drawMap();
@@ -872,12 +906,20 @@ function update(dt) {
   }
 
   // the sun gets low as the shift runs out
-  const day = clamp(game.time / 75, 0, 1);
-  scene.background.lerpColors(SKY_DUSK, SKY_DAY, day);
-  scene.fog.color.copy(scene.background);
+  const day = game.state === 'title' ? 1 : clamp(game.time / 75, 0, 1);
+  skyMat.uniforms.top.value.lerpColors(SKY_DUSK[0], SKY_DAY[0], day);
+  skyMat.uniforms.horizon.value.lerpColors(SKY_DUSK[1], SKY_DAY[1], day);
+  scene.fog.color.copy(skyMat.uniforms.horizon.value);
+  scene.background.copy(scene.fog.color);
   sun.color.lerpColors(SUN_DUSK, SUN_DAY, day);
-  sun.position.set(truck.pos.x + 35 + (1 - day) * 40, 30 + day * 40, truck.pos.z + 28);
-  sun.target.position.copy(truck.pos);
+  sun.intensity = 2.2 + day * 0.6;
+  hemi.intensity = 1.0 + day * 0.25;
+  windowMat.emissiveIntensity = (1 - day) * 1.1;
+  sunDir.set(0.42 + (1 - day) * 0.45, 0.28 + day * 0.5, 0.36).normalize();
+  // keep the shadow map centred a little ahead of the truck, where the camera is looking
+  const ahead = game.state === 'title' ? 0 : 22;
+  sun.target.position.set(truck.pos.x + Math.sin(camYaw) * ahead, 0, truck.pos.z + Math.cos(camYaw) * ahead);
+  sun.position.copy(sun.target.position).addScaledVector(sunDir, 120);
   for (const c of clouds) { c.position.x += dt * 2; if (c.position.x > 380) c.position.x = -380; }
 }
 
@@ -896,6 +938,9 @@ function frame(now) {
   last = now;
   update(dt);
   updateCamera(dt);
+  sky.position.copy(camera.position);
+  sunDisc.position.copy(camera.position).addScaledVector(sunDir, 850);
+  sunDisc.lookAt(camera.position);
   renderer.render(scene, camera);
   updateHud(dt);
   requestAnimationFrame(frame);

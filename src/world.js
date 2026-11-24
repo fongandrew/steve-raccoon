@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import {
   M, box, cyl, ball, cone, sign, makeHouse, makeTree, makeMailbox, makeFlamingo, makeGnome,
-  makeHydrant, makeBench, makeBin,
+  makeHydrant, makeBench, makeBin, noiseTexture,
 } from './models.js';
 
 export const N = 4, B = 44, R = 14, P = B + R;
@@ -64,11 +64,15 @@ export function buildWorld(scene) {
   };
 
   // ---- ground, roads, markings
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(1200, 1200), M(0x8fd67a));
+  const texMat = (hex, amount, repeat) => new THREE.MeshStandardMaterial({ map: noiseTexture(hex, amount, repeat), roughness: 1 });
+  const lawnMats = [texMat(0x86d672, 0.13, 9), texMat(0x7fd06c, 0.13, 9), texMat(0x8cd977, 0.13, 9)];
+  const parkMat = texMat(0x78c965, 0.16, 9);
+  const paveMat = texMat(0xe9e2cf, 0.05, 10);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(1200, 1200), texMat(0x8fd67a, 0.1, 260));
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
   root.add(ground);
-  const asphalt = new THREE.Mesh(new THREE.PlaneGeometry(2 * HALF, 2 * HALF), M(0x666b78));
+  const asphalt = new THREE.Mesh(new THREE.PlaneGeometry(2 * HALF, 2 * HALF), texMat(0x646976, 0.12, 52));
   asphalt.rotation.x = -Math.PI / 2;
   asphalt.position.y = 0.02;
   asphalt.receiveShadow = true;
@@ -94,6 +98,27 @@ export function buildWorld(scene) {
   dashes.receiveShadow = true;
   root.add(dashes);
 
+  // zebra crossings on every arm of every junction
+  const zebra = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.75, 2.0).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xf4f1e6, roughness: 1 }), 25 * 4 * 6);
+  let zi = 0;
+  for (let i = 0; i <= N; i++) {
+    for (let j = 0; j <= N; j++) {
+      const ix = roadC(i), iz = roadC(j);
+      for (const [ax, az] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        if ((ax > 0 && i === N) || (ax < 0 && i === 0) || (az > 0 && j === N) || (az < 0 && j === 0)) continue;
+        for (let k = 0; k < 6; k++) {
+          const off = (k - 2.5) * 2.05;
+          dq.setFromAxisAngle(up, ax ? Math.PI / 2 : 0);
+          dm.compose(dv.set(ix + ax * 8.3 + (az ? off : 0), 0.045, iz + az * 8.3 + (ax ? off : 0)), dq, ds);
+          zebra.setMatrixAt(zi++, dm);
+        }
+      }
+    }
+  }
+  zebra.count = zi;
+  zebra.receiveShadow = true;
+  root.add(zebra);
+
   // ---- blocks
   let dump = null, park = null, pizza = null;
   for (let bi = 0; bi < N; bi++) {
@@ -103,8 +128,9 @@ export function buildWorld(scene) {
 
       if (is(DUMP)) { dump = buildDump(cx, cz); continue; }
 
-      root.add(box(B, 0.24, B, 0xe9e2cf, cx, 0.12, cz));
-      root.add(box(B - 6, 0.3, B - 6, is(PARK) ? 0x7fcf6b : 0x86d672, cx, 0.15, cz));
+      root.add(box(B + 0.5, 0.17, B + 0.5, 0xa8a294, cx, 0.085, cz)); // kerb
+      root.add(box(B, 0.24, B, paveMat, cx, 0.12, cz));
+      root.add(box(B - 6, 0.3, B - 6, is(PARK) ? parkMat : lawnMats[(bi * 3 + bj * 5) % 3], cx, 0.15, cz));
       const hs = rng() < 0.5 ? 1 : -1, hz = rng() < 0.5 ? 1 : -1;
       addProp('hydrant', makeHydrant, cx + hs * 20.5, cz + hz * 20.5, 0, 0.5, 0.24);
 
@@ -146,14 +172,14 @@ export function buildWorld(scene) {
   }
 
   function buildPark(cx, cz) {
-    const pond = new THREE.Mesh(new THREE.CircleGeometry(8.5, 20), M(0x6cc4f0, { roughness: 0.25, flatShading: false }));
+    const pond = new THREE.Mesh(new THREE.CircleGeometry(8.5, 40), M(0x6cc4f0, { roughness: 0.25, flatShading: false }));
     pond.rotation.x = -Math.PI / 2;
-    pond.position.set(cx + 2, 0.32, cz - 1);
+    pond.position.set(cx + 2, 0.36, cz - 1);
     pond.receiveShadow = true;
     root.add(pond);
-    const rim = new THREE.Mesh(new THREE.RingGeometry(8.5, 9.3, 20), M(0xd9c9a0));
+    const rim = new THREE.Mesh(new THREE.RingGeometry(8.4, 9.4, 40), M(0xd9c9a0));
     rim.rotation.x = -Math.PI / 2;
-    rim.position.set(cx + 2, 0.315, cz - 1);
+    rim.position.set(cx + 2, 0.33, cz - 1);
     root.add(rim);
     for (let i = 0; i < 9; i++) {
       const a = i / 9 * 6.28 + 0.3;
@@ -222,7 +248,8 @@ export function buildWorld(scene) {
   }
 
   function buildDump(cx, cz) {
-    root.add(box(B, 0.2, B, 0xb79463, cx, 0.1, cz));
+    root.add(box(B + 0.5, 0.17, B + 0.5, 0xa8a294, cx, 0.085, cz));
+    root.add(box(B, 0.2, B, texMat(0xb79463, 0.1, 10), cx, 0.1, cz));
     // fence on the two outer edges
     for (let i = -5; i <= 5; i++) {
       root.add(box(0.3, 2.2, 0.3, 0x8a5a3a, cx + 21.5, 1.1, cz + i * 4.2));
@@ -237,7 +264,7 @@ export function buildWorld(scene) {
 
     const pile = new THREE.Group();
     pile.position.set(cx + 8, 0.2, cz + 8);
-    const mound = new THREE.Mesh(new THREE.ConeGeometry(11, 9, 9), M(0x8d9078));
+    const mound = new THREE.Mesh(new THREE.ConeGeometry(11, 9, 11), M(0x8d9078));
     mound.position.y = 4.5;
     mound.castShadow = true; mound.receiveShadow = true;
     pile.add(mound);
@@ -274,23 +301,27 @@ export function buildWorld(scene) {
 
     // drop pad
     const pad = new THREE.Group();
-    pad.position.set(cx - 9, 0.22, cz - 9);
-    const disc = new THREE.Mesh(new THREE.CircleGeometry(6.5, 28), M(0xffe066, { emissive: 0xffc400, emissiveIntensity: 0.25 }));
+    pad.position.set(cx - 7, 0.22, cz - 7);
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(8, 40), M(0xffe066, { emissive: 0xffc400, emissiveIntensity: 0.25 }));
     disc.rotation.x = -Math.PI / 2; disc.receiveShadow = true;
-    const ring = new THREE.Mesh(new THREE.RingGeometry(5.7, 6.5, 28), M(0xff5a3c, { emissive: 0xff3c1a, emissiveIntensity: 0.5 }));
+    const ring = new THREE.Mesh(new THREE.RingGeometry(7.1, 8, 40), M(0xff5a3c, { emissive: 0xff3c1a, emissiveIntensity: 0.5 }));
     ring.rotation.x = -Math.PI / 2; ring.position.y = 0.02;
-    const label = sign([{ text: 'DUMP', size: 150, color: '#7a4a12' }, { text: 'HERE', size: 150, color: '#7a4a12' }], 7, 7, { w: 512, h: 512, bg: '#ffe066' });
+    const label = sign([{ text: 'DUMP', size: 150, color: '#7a4a12' }, { text: 'HERE', size: 150, color: '#7a4a12' }], 8, 8, { w: 512, h: 512, bg: '#ffe066' });
     label.rotation.x = -Math.PI / 2; label.rotation.z = Math.PI * 1.25; label.position.y = 0.03;
     pad.add(disc, label, ring);
     root.add(pad);
 
-    return { x: cx, z: cz, pad: new THREE.Vector3(cx - 9, 0, cz - 9), padR: 6.5, padMesh: ring, pile, pilePos: new THREE.Vector3(cx + 8, 0, cz + 8) };
+    return { x: cx, z: cz, pad: new THREE.Vector3(cx - 7, 0, cz - 7), padR: 8, padMesh: ring, pile, pilePos: new THREE.Vector3(cx + 8, 0, cz + 8) };
   }
 
   // ---- edge of town: hedges, trees and rolling hills
   for (const s of [-1, 1]) {
     root.add(box(2 * HALF + 6, 3, 3, 0x3f9a55, 0, 1.5, s * (HALF + 1.5)));
     root.add(box(3, 3, 2 * HALF + 6, 0x3f9a55, s * (HALF + 1.5), 1.5, 0));
+    root.add(box(2 * HALF + 6.4, 0.5, 3.4, 0x58b866, 0, 3.1, s * (HALF + 1.5)));
+    root.add(box(3.4, 0.5, 2 * HALF + 6.4, 0x58b866, s * (HALF + 1.5), 3.1, 0));
+    root.add(box(2 * HALF, 0.17, 0.5, 0xa8a294, 0, 0.085, s * (HALF - 0.25)));
+    root.add(box(0.5, 0.17, 2 * HALF, 0xa8a294, s * (HALF - 0.25), 0.085, 0));
   }
   for (let i = 0; i < 70; i++) {
     const a = i / 70 * 6.28 + rng() * 0.05, r = HALF * 1.45 + 6 + rng() * 40;
