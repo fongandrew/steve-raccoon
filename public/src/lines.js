@@ -79,4 +79,14 @@ export const LINES = {
 		"Steve has tiny hands. He'd like that noted.",
 	],
 };
-export const pickLine = (kind) => LINES[kind][(Math.random() * LINES[kind].length) | 0];
+/** @typedef {keyof typeof LINES} LineKind */
+
+/**
+ * A random line for an event.
+ *
+ * @param {LineKind} kind
+ */
+export const pickLine = (kind) => {
+	const lines = LINES[kind];
+	return /** @type {string} */ (lines[(Math.random() * lines.length) | 0]);
+};

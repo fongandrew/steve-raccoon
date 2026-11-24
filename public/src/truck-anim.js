@@ -1,7 +1,7 @@
 import * as THREE from '../vendor/three.module.js';
 import { BOOST_COLORS, CAPACITY } from './constants.js';
 import { keys } from './input.js';
-import { LTT } from './loader.js';
+import { LIFT } from './loader.js';
 import { spawnParticle } from './particles.js';
 import { steve, truck, world } from './scene.js';
 import { state, T } from './state.js';
@@ -173,7 +173,7 @@ export function animateTruck(dt, time) {
 	head.rotation.y += (headY - head.rotation.y) * Math.min(1, dt * 8);
 	head.rotation.z = (head.userData.baseTilt || 0) + headZ;
 	const cele = state.celebrateT > 0 ? Math.abs(Math.sin(state.celebrateT * 12)) * 0.08 : 0;
-	const ducking = state.lift && state.lift.t > 0.55 && state.lift.t < LTT.lower[1];
+	const ducking = state.lift && state.lift.t > 0.55 && state.lift.t < LIFT.end.lower;
 	duckAmt += ((ducking ? 1 : 0) - duckAmt) * Math.min(1, dt * 10);
 	steve.group.position.y =
 		steve.group.userData.baseY + cele + (T.grounded ? 0 : 0.1) - duckAmt * 0.45;

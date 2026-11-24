@@ -5,7 +5,7 @@ import { narrate, popup, toast } from './hud.js';
 import { spawnParticle } from './particles.js';
 import { scene, truck, world } from './scene.js';
 import { addScore, state, T } from './state.js';
-import { ease } from './util.js';
+import { ease, timeline } from './util.js';
 
 const armTmp = new THREE.Vector3();
 
@@ -47,7 +47,7 @@ const loaderSwing = (from, k) => ({
 	tilt: LTOP.tilt * ease(Math.max(0, Math.min(1, (k - 0.55) / 0.45))),
 });
 
-const LT = {
+export const LIFT = timeline({
 	reach: 0.5,
 	grip: 0.15,
 	lift: 0.95,
@@ -55,16 +55,7 @@ const LT = {
 	lower: 0.85,
 	release: 0.15,
 	retract: 0.4,
-};
-export const LTT = {};
-{
-	let t = 0;
-	for (const k of Object.keys(LT)) {
-		LTT[k] = [t, t + LT[k]];
-		t += LT[k];
-	}
-}
-const lphase = (t, k) => Math.max(0, Math.min(1, (t - LTT[k][0]) / LT[k]));
+});
 
 export function resetBins() {
 	state.lift = null;
@@ -180,20 +171,20 @@ function updateLift(dt) {
 		b.group.rotation.set(0, b.facing + shortAngle(L.alignedRot - b.facing) * k, 0);
 	};
 	let pose;
-	if (t < LTT.reach[1]) {
-		pose = lerpL(LREST, grab, ease(lphase(t, 'reach')));
-		slideBin(ease(Math.max(0, (lphase(t, 'reach') - 0.5) * 2)));
-	} else if (t < LTT.grip[1]) pose = grab;
-	else if (t < LTT.dump[1]) {
+	if (t < LIFT.end.reach) {
+		pose = lerpL(LREST, grab, ease(LIFT.phase(t, 'reach')));
+		slideBin(ease(Math.max(0, (LIFT.phase(t, 'reach') - 0.5) * 2)));
+	} else if (t < LIFT.end.grip) pose = grab;
+	else if (t < LIFT.end.dump) {
 		if (!L.attached) {
 			L.attached = true;
 			b.collider.off = true;
 			LOADER.forks.attach(b.group);
 			audio.clang();
 		}
-		if (t < LTT.lift[1]) pose = loaderSwing(grab, ease(lphase(t, 'lift')));
+		if (t < LIFT.end.lift) pose = loaderSwing(grab, ease(LIFT.phase(t, 'lift')));
 		else {
-			const k = lphase(t, 'dump');
+			const k = LIFT.phase(t, 'dump');
 			pose = { ...LTOP, tilt: LTOP.tilt + Math.sin(k * Math.PI * 6) * 0.1 * (1 - k) };
 			if (Math.random() < 0.8) {
 				const mouth = b.group.localToWorld(
@@ -230,8 +221,8 @@ function updateLift(dt) {
 					toast('🚛 Truck is FULL! Head to The Dump (orange on the map).');
 			}
 		}
-	} else if (t < LTT.lower[1]) pose = loaderSwing(grab, 1 - ease(lphase(t, 'lower')));
-	else if (t < LTT.release[1]) {
+	} else if (t < LIFT.end.lower) pose = loaderSwing(grab, 1 - ease(LIFT.phase(t, 'lower')));
+	else if (t < LIFT.end.release) {
 		pose = grab;
 		if (!L.released) {
 			L.released = true;
@@ -241,16 +232,16 @@ function updateLift(dt) {
 			b.state = 'idle';
 			b.cooldown = 35;
 		}
-	} else if (t < LTT.retract[1]) {
-		pose = lerpL(grab, LREST, ease(lphase(t, 'retract')));
-		slideBin(1 - ease(lphase(t, 'retract'))); // scoot it back where it belongs
+	} else if (t < LIFT.end.retract) {
+		pose = lerpL(grab, LREST, ease(LIFT.phase(t, 'retract')));
+		slideBin(1 - ease(LIFT.phase(t, 'retract'))); // scoot it back where it belongs
 	} else {
 		slideBin(0);
 		b.collider.off = false;
 		state.lift = null;
 		pose = LREST;
 	}
-	if (state.lift) L.hold = t < LTT.release[1];
+	if (state.lift) L.hold = t < LIFT.end.release;
 	Object.assign(loaderPose, pose);
 	applyLoader(loaderPose);
 }

@@ -1,10 +1,18 @@
+// Tunables and data tables. No DOM, no three.js.
+
 export const SHIFT = 240; // seconds per shift
 export const CAPACITY = 12;
 export const MAX_SPEED = 24;
 export const ACTIVE_CANS = 7;
 export const GRAVITY = 30;
-export const STAR_SCORES = [300, 650, 1100];
+/** Score needed for one, two and three stars. */
+export const STAR_SCORES = /** @type {[number, number, number]} */ ([300, 650, 1100]);
 
+/**
+ * What Steve might find in a bag. `h` is how much it fills his tummy.
+ *
+ * @type {{ h: number, msg: string, fx?: 'zoom' | 'hiccups' }[]}
+ */
 export const SNACKS = [
 	{ h: 40, msg: 'Half a burrito. Still warm-ish.' },
 	{ h: 25, fx: 'zoom', msg: 'Coffee grounds! Steve is VIBRATING.' },
@@ -19,6 +27,11 @@ export const SNACKS = [
 	{ h: 15, msg: 'A single grape. Steve savors it.' },
 ];
 
+/**
+ * Job titles by final score, lowest first.
+ *
+ * @type {[min: number, name: string][]}
+ */
 export const RANKS = [
 	[0, 'Trash Intern'],
 	[250, 'Garbage Gremlin'],

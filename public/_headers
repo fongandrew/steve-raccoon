@@ -1,0 +1,9 @@
+# Netlify consumes this file as configuration and does not serve it, which is
+# why scripts/build.js leaves it out of the service worker's PRECACHE (a
+# precached 404 fails the whole cache.addAll()).
+
+/index.html
+  Cache-Control: no-store
+
+/sw.js
+  Cache-Control: no-store

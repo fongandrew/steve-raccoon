@@ -27,6 +27,8 @@ import { groundHeight } from './world.js';
 const MAX_DT = 1 / 30;
 
 let lastNow = 0;
+/** Off while a test steps the game by hand: software WebGL takes ~0.5s a frame. */
+let drawing = true;
 let elapsed = 0;
 
 /**
@@ -105,7 +107,7 @@ function frame() {
 	const dt = Math.min((now - lastNow) / 1000, MAX_DT);
 	lastNow = now;
 	update(dt);
-	render();
+	if (drawing) render();
 }
 
 /** Boot the game: wire the DOM, park the truck on the title screen, start the loop. */
@@ -151,6 +153,10 @@ export function start() {
 		 */
 		tick: (seconds) => {
 			for (let t = 0; t < seconds - 1e-9; t += 1 / 60) update(1 / 60);
+		},
+		/** Stop (or resume) drawing frames; the simulation keeps running either way. */
+		setRendering: (on) => {
+			drawing = on;
 		},
 		/** Photo-mode camera: `{ pos: [x, y, z], look: [x, y, z], fov? }`, or `null` to release. */
 		setCamera: setCameraOverride,

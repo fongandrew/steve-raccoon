@@ -5,7 +5,7 @@ import { narrate, popup, toast } from './hud.js';
 import { burst, spawnParticle } from './particles.js';
 import { scene, truck, world } from './scene.js';
 import { addScore, state, T } from './state.js';
-import { cap, ease } from './util.js';
+import { cap, ease, timeline } from './util.js';
 import { WALK_Y } from './world.js';
 
 export function spawnCan(silent = false) {
@@ -98,6 +98,7 @@ export function startGrab(h, arm) {
 		added: false,
 		attached: false,
 		released: false,
+		hold: true,
 		home: can.group.position.clone(),
 		rotY: can.group.rotation.y,
 	};
@@ -114,7 +115,7 @@ export function startGrab(h, arm) {
 }
 
 // Timeline (seconds). The truck holds still until the can is back down.
-const G = {
+const GRAB = timeline({
 	reach: 0.45,
 	grip: 0.12,
 	pull: 0.3,
@@ -124,16 +125,7 @@ const G = {
 	push: 0.3,
 	release: 0.12,
 	retract: 0.3,
-};
-const GT = {};
-{
-	let t = 0;
-	for (const k of Object.keys(G)) {
-		GT[k] = [t, t + G[k]];
-		t += G[k];
-	}
-}
-const phase = (t, k) => Math.max(0, Math.min(1, (t - GT[k][0]) / G[k]));
+});
 for (const a of ARMS) applyArm(a, a.pose);
 
 export function updateGrabs(dt) {
@@ -157,22 +149,22 @@ function updateGrab(g, dt) {
 	const carry = { ...REST };
 	let pose;
 	let close = 0;
-	if (t < GT.reach[1]) {
-		pose = lerpPose(REST, grabPose, ease(phase(t, 'reach')));
-	} else if (t < GT.grip[1]) {
+	if (t < GRAB.end.reach) {
+		pose = lerpPose(REST, grabPose, ease(GRAB.phase(t, 'reach')));
+	} else if (t < GRAB.end.grip) {
 		pose = grabPose;
-		close = ease(phase(t, 'grip'));
-	} else if (t < GT.dump[1]) {
+		close = ease(GRAB.phase(t, 'grip'));
+	} else if (t < GRAB.end.dump) {
 		if (!g.attached) {
 			g.attached = true;
 			arm.gripper.attach(can.group);
 		}
 		close = 1;
-		if (t < GT.pull[1]) pose = lerpPose(grabPose, carry, ease(phase(t, 'pull')));
-		else if (t < GT.lift[1]) pose = swing(ease(phase(t, 'lift')));
+		if (t < GRAB.end.pull) pose = lerpPose(grabPose, carry, ease(GRAB.phase(t, 'pull')));
+		else if (t < GRAB.end.lift) pose = swing(ease(GRAB.phase(t, 'lift')));
 		else {
 			// Shake it out
-			const k = phase(t, 'dump');
+			const k = GRAB.phase(t, 'dump');
 			pose = swing(1);
 			pose.tilt += Math.sin(k * Math.PI * 6) * 0.12 * (1 - k);
 			can.lid.rotation.x = -1.9 * Math.min(1, k * 4);
@@ -196,15 +188,15 @@ function updateGrab(g, dt) {
 				collectBags(g.h);
 			}
 		}
-	} else if (t < GT.push[1]) {
+	} else if (t < GRAB.end.push) {
 		close = 1;
-		if (t < GT.lower[1]) {
-			pose = swing(1 - ease(phase(t, 'lower')));
-			can.lid.rotation.x = -1.9 + 1.3 * phase(t, 'lower');
-		} else pose = lerpPose(carry, grabPose, ease(phase(t, 'push')));
-	} else if (t < GT.release[1]) {
+		if (t < GRAB.end.lower) {
+			pose = swing(1 - ease(GRAB.phase(t, 'lower')));
+			can.lid.rotation.x = -1.9 + 1.3 * GRAB.phase(t, 'lower');
+		} else pose = lerpPose(carry, grabPose, ease(GRAB.phase(t, 'push')));
+	} else if (t < GRAB.end.release) {
 		pose = grabPose;
-		close = 1 - ease(phase(t, 'release'));
+		close = 1 - ease(GRAB.phase(t, 'release'));
 		if (!g.released) {
 			g.released = true;
 			scene.attach(can.group);
@@ -213,8 +205,8 @@ function updateGrab(g, dt) {
 			can.group.scale.set(1, 1, 1);
 			can.lid.rotation.x = -0.6; // left ajar, as is tradition
 		}
-	} else if (t < GT.retract[1]) {
-		pose = lerpPose(grabPose, REST, ease(phase(t, 'retract')));
+	} else if (t < GRAB.end.retract) {
+		pose = lerpPose(grabPose, REST, ease(GRAB.phase(t, 'retract')));
 	} else {
 		g.h.state = 'done';
 		g.h.hideT = 4;
@@ -223,7 +215,7 @@ function updateGrab(g, dt) {
 		applyArm(arm, arm.pose);
 		return;
 	}
-	g.hold = t < GT.release[1];
+	g.hold = t < GRAB.end.release;
 	Object.assign(arm.pose, pose, { close });
 	applyArm(arm, arm.pose);
 }

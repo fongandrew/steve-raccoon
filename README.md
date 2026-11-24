@@ -5,14 +5,38 @@ It's a lovely day and you're a raccoon driving a trash truck.
 A small, cute 3D arcade game built with [three.js](https://threejs.org/). Every model, sound, and
 the music are generated in code, so there are no asset files.
 
-## Play
+## Running it
 
 ```bash
-npm install
-npm run dev
+npm install          # also copies Three.js into public/vendor/ (see below)
+npm run dev          # http://localhost:3000
 ```
 
-Then open the URL Vite prints. To build a static copy, run `npm run build`; the output goes in `dist/`.
+```bash
+npm run check        # vendor:check + lint + typecheck + unit tests + Playwright e2e
+npm run build        # dist/: minified, service worker precache stamped
+```
+
+### Deploying
+
+The game deploys to Netlify site `3e3fd768-c76d-4518-a20d-bbe3e8cbe9f6` by uploading `dist/`. Netlify
+doesn't build anything itself, and nothing deploys on push. The Netlify command-line tool runs
+through `npx`, so there's nothing to install globally.
+
+```bash
+npx netlify-cli@27 login     # once per machine (or set NETLIFY_AUTH_TOKEN for CI)
+npm run deploy:draft         # build + a private preview URL; the live site is untouched
+npm run deploy               # build + publish to production
+```
+
+### Offline and updates
+
+`public/sw.js` is a service worker. `npm run build` stamps it with a version hash and the full
+list of shipped files. The first visit caches the whole game, so it then plays **offline** and can
+be installed to a phone's home screen (`site.webmanifest`, landscape). On each visit, and whenever
+the tab comes back into view, the page checks for a new deploy. The new version installs in the
+background and is used from the next launch. The worker is off on `localhost` so dev edits show up
+immediately; add `?sw=1` to test it locally.
 
 ## How to play
 
@@ -64,14 +88,59 @@ On phones and tablets (landscape): drag anywhere on the left half to drive and s
 to reverse), hold **DRIFT** on the right to drift and release to boost, 📯 honks, tap Steve's
 face to snack, and the pause button has unstick and sound options.
 
-## Code layout
+## How it's built
 
-- `src/main.js`: game loop, truck physics, cans, dumping, snacks, cats, camera, HUD
-- `src/world.js`: builds the seeded town (roads, houses, parks, plaza, dump) and its colliders
-- `src/models.js`: low-poly models built from primitives (Steve, the truck, houses, cats...)
-- `src/audio.js`: Web Audio sound effects, engine hum, and the background tune
+There is no bundler: it's static files. `public/` is the site, with a thin `index.html` and
+`styles.css` and ES modules under `public/src/`. The code uses JSDoc types checked by
+`tsc --checkJs`, the same conventions as the
+[pomelo-penguin](https://github.com/fongandrew/pomelo-penguin) games and
+[penguin-push](https://github.com/fongandrew/penguin-push).
 
-## Deploying
+### Three.js
 
-`.github/workflows/pages.yml` builds and publishes the game to GitHub Pages on every push to `main`.
-To turn it on, set the repo's Settings → Pages → Source to "GitHub Actions".
+Three.js is an npm dependency, pinned in `package.json`. Because the browser can't resolve a bare
+`import 'three'` without a bundler, `scripts/vendor.js` copies the three files the game uses out of
+`node_modules/three` into `public/vendor/` and points the addon's `three` import at the copy. It
+runs on every `npm install`. `public/vendor/` is generated and gitignored, so don't edit it; source
+files import `../vendor/three.module.js`. Types come from `@types/three` through small generated
+`.d.ts` files beside each copy.
+
+To upgrade: bump `three` and `@types/three` in `package.json`, then `npm install`.
+`npm run vendor:check` (part of `npm run check` and `npm run build`) fails if the copies don't match
+the installed package.
+
+### Modules
+
+Each system is one module. The shift's state (`state`) and the truck's body (`T`) live in
+`state.js`; the Three.js scene, camera, renderer, town and truck model are created once in
+`scene.js`. Modules import what they need from those two.
+
+| File | What |
+| --- | --- |
+| `main.js` | `start()`: wires input and screens, runs the frame loop (`update(dt)` then `render()`), exposes `window.__game` |
+| `state.js` | shift state, truck body, `resetShiftState()`, `addScore()` |
+| `constants.js` / `lines.js` | tunables and data tables / the narrator's lines |
+| `util.js` / `review.js` | pure helpers (easing, timelines, formatting) / stars, rank and Brenda's review |
+| `scene.js` | renderer, scene, camera, the built `world`, the truck model |
+| `world.js` | builds the seeded town (roads, houses, parks, plaza, dump) and its colliders |
+| `models.js` / `props.js` | low-poly models built from primitives / instanced batches for repeated props |
+| `truck.js` / `truck-anim.js` | driving physics, drifting, collisions / the truck's and Steve's animation |
+| `cans.js` / `loader.js` / `pile.js` | curbside cans and the side grabber arms / dumpsters and the front loader / the trash mountain |
+| `gameplay.js` | the per-frame rules of a shift: hunger, snacks, can spawning, dumping, the clock |
+| `smash.js` | everything knock-over-able: props, trees, bushes |
+| `critters.js` / `geese.js` / `pigeons.js` / `balls.js` / `treasures.js` | the town's residents and toys |
+| `sky.js` / `camera.js` / `guide.js` / `particles.js` | day cycle and ambient life / chase camera / the guide arrow / particles |
+| `hud.js` / `minimap.js` / `portrait.js` / `shift.js` | HUD, toasts and popups / minimap / Steve cam / title, pause and results screens, shift reset |
+| `input.js` / `audio.js` | keyboard, touch stick and buttons / synthesized sound effects and music |
+
+### Tests
+
+- `tests/*.test.js` (Vitest, jsdom) cover the pure modules: helpers, scoring and reviews, state
+  reset, narrator data, and town generation (the same town every time, cans at the curb, ramps that
+  rise).
+- `tests/e2e/*.spec.js` (Playwright) boot the real game, play a shift, and check it works offline.
+
+The test hook `window.__game` exposes `state`, `T`, `world` and the entity lists, plus drivers:
+`startShift`, `endShift`, `setPaused`, `teleport(x, z, heading)`, `skipTo(seconds)`,
+`tick(seconds)` (steps the simulation at 60 Hz without drawing), `setRendering(on)` and
+`setCamera({ pos, look, fov })` for screenshots. Specs read state through it, not through pixels.
