@@ -567,6 +567,7 @@ function resetGame() {
     stats: { cans: 0, golden: 0, bags: 0, snacks: 0, bonks: 0, cats: 0, air: 0, loads: 0 },
   });
   for (const h of world.houses) {
+    for (const c of [h.can, h.goldCan]) if (c.group.parent !== scene) scene.attach(c.group);
     h.state = 'idle';
     h.cooldown = 0;
     h.golden = false;
@@ -612,69 +613,168 @@ function canFor(h) {
   return h.golden ? h.goldCan : h.can;
 }
 
+// ---------------------------------------------------------------------------
+// Grabber arm: 2-link IK in a vertical plane that yaws toward the can.
+// Arm-plane coords: u = outward from the truck's right side, v = up.
+// ---------------------------------------------------------------------------
+const ARM = truck.arm;
+const ARM_REACH = ARM.L1 + ARM.L2 - 0.05;
+const GRIP_H = 0.7; // grip height above the can's base
+const REST = { u: 0.5, v: 0.25, r: 0, yaw: 0 };
+const LIFT = { u: 0.55, v: 2.75, r: 0, yaw: 0 };
+const DUMP = { u: -0.55, v: 3.15, r: -2.45, yaw: 0 };
+const armPose = { ...REST, close: 0 };
+const armTmp = new THREE.Vector3();
+
+/** Where the gripper must be to hold a can whose base is at world point p. */
+function canToArm(p) {
+  ARM.base.worldToLocal(armTmp.copy(p));
+  // undo the base's own yaw so we get the yaw needed to face the can
+  const c = Math.cos(ARM.base.rotation.y);
+  const sn = Math.sin(ARM.base.rotation.y);
+  const x = armTmp.x * c + armTmp.z * sn;
+  const z = -armTmp.x * sn + armTmp.z * c;
+  const horiz = Math.hypot(x, z);
+  return {
+    u: horiz - ARM.GRIP,
+    v: armTmp.y + GRIP_H,
+    yaw: Math.atan2(z, -x),
+    reach: Math.hypot(horiz - ARM.GRIP, armTmp.y + GRIP_H),
+    side: -x, // > 0 when the can is on the arm side of the truck
+  };
+}
+
+function applyArm(pose) {
+  const { L1, L2 } = ARM;
+  let u = pose.u;
+  let v = pose.v;
+  let d = Math.hypot(u, v);
+  const dMin = Math.abs(L1 - L2) + 0.05;
+  const dMax = L1 + L2 - 0.01;
+  if (d < dMin || d > dMax) {
+    const k = Math.min(dMax, Math.max(dMin, d)) / (d || 1);
+    u *= k;
+    v *= k;
+    d = Math.hypot(u, v);
+  }
+  // elbow-up solution
+  const phi1 = Math.atan2(v, u) + Math.acos(Math.min(1, (L1 * L1 + d * d - L2 * L2) / (2 * L1 * d)));
+  const ex = L1 * Math.cos(phi1);
+  const ey = L1 * Math.sin(phi1);
+  const phi2 = Math.atan2(v - ey, u - ex);
+  ARM.base.rotation.y = pose.yaw;
+  ARM.shoulder.rotation.z = -phi1;
+  ARM.elbow.rotation.z = -(phi2 - phi1);
+  ARM.gripper.rotation.z = pose.r + phi2;
+  for (const f of ARM.fingers) f.rotation.y = f.userData.side * (0.55 - pose.close * 0.62);
+}
+
+const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+const lerpPose = (a, b, k) => ({
+  u: a.u + (b.u - a.u) * k, v: a.v + (b.v - a.v) * k, r: a.r + (b.r - a.r) * k, yaw: a.yaw + (b.yaw - a.yaw) * k,
+});
+
 function startGrab(h) {
   h.state = 'grabbing';
   h.marker.group.visible = false;
   h.goldMarker.group.visible = false;
-  state.grab = { h, t: 0, added: false, from: new THREE.Vector3(h.canX, 0.2, h.canZ) };
+  const can = canFor(h);
+  state.grab = { h, t: 0, added: false, attached: false, released: false, home: can.group.position.clone(), rotY: can.group.rotation.y };
   audio.grab();
 }
 
+// Timeline (seconds). The truck holds still until the can is back down.
+const G = { reach: 0.45, grip: 0.12, lift: 0.4, over: 0.3, dump: 0.5, back: 0.3, down: 0.4, release: 0.12, retract: 0.35 };
+const GT = {};
+{
+  let t = 0;
+  for (const k of Object.keys(G)) {
+    GT[k] = [t, t + G[k]];
+    t += G[k];
+  }
+}
+const phase = (t, k) => Math.max(0, Math.min(1, (t - GT[k][0]) / G[k]));
+applyArm(armPose);
+
 function updateGrab(dt) {
   const g = state.grab;
+  truck.body.updateMatrixWorld(true);
   if (!g) {
-    // relax arm
-    truck.armUpper.rotation.z += (0 - truck.armUpper.rotation.z) * Math.min(1, dt * 6);
-    truck.elbow.rotation.x += (0 - truck.elbow.rotation.x) * Math.min(1, dt * 6);
+    const k = 1 - Math.exp(-8 * dt);
+    Object.assign(armPose, lerpPose(armPose, REST, k));
+    armPose.close += (0 - armPose.close) * k;
+    applyArm(armPose);
     return;
   }
   g.t += dt;
+  const t = g.t;
   const can = canFor(g.h);
-  const hop = truck.group.localToWorld(tmpV.copy(truck.hopperLocal));
-  const ease = (x) => x * x * (3 - 2 * x);
-  let armLift = 0;
-  if (g.t < 0.55) {
-    const s = ease(g.t / 0.55);
-    can.group.position.lerpVectors(g.from, hop, s);
-    can.group.position.y += Math.sin(s * Math.PI) * 3.5;
-    can.group.rotation.x = s * Math.PI * 0.9;
-    can.group.rotation.z = Math.sin(s * Math.PI) * 0.6;
-    armLift = s;
-  } else if (g.t < 1.1) {
-    can.group.position.copy(hop);
-    can.group.position.x += Math.sin(g.t * 50) * 0.15;
-    can.group.rotation.x = Math.PI * 0.9 + Math.sin(g.t * 40) * 0.15;
-    can.lid.rotation.x = -1.8;
-    armLift = 1;
-    if (Math.random() < 0.6) {
-      spawnParticle({
-        pos: hop.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.6, -0.4, (Math.random() - 0.5) * 0.6)),
-        vel: new THREE.Vector3((Math.random() - 0.5) * 2, -2, (Math.random() - 0.5) * 2),
-        color: TRASH_COLORS[(Math.random() * TRASH_COLORS.length) | 0],
-        size: 0.25 + Math.random() * 0.2, life: 0.5, grav: 15,
-      });
+  const hover = (p) => ({ ...p, v: p.v + 0.55 });
+  const grabPose = { ...canToArm(g.home), r: 0 };
+  let pose;
+  let close = 0;
+  if (t < GT.reach[1]) {
+    const k = ease(phase(t, 'reach'));
+    // Out to just above the can, then drop onto it
+    pose = k < 0.75 ? lerpPose(REST, hover(grabPose), ease(k / 0.75)) : lerpPose(hover(grabPose), grabPose, ease((k - 0.75) / 0.25));
+  } else if (t < GT.grip[1]) {
+    pose = grabPose;
+    close = ease(phase(t, 'grip'));
+  } else if (t < GT.dump[1]) {
+    if (!g.attached) {
+      g.attached = true;
+      ARM.gripper.attach(can.group);
     }
-    if (!g.added && g.t > 0.8) {
-      g.added = true;
-      collectBags(g.h);
+    close = 1;
+    if (t < GT.lift[1]) pose = lerpPose(grabPose, LIFT, ease(phase(t, 'lift')));
+    else if (t < GT.over[1]) pose = lerpPose(LIFT, DUMP, ease(phase(t, 'over')));
+    else {
+      // Shake it out
+      const k = phase(t, 'dump');
+      pose = { ...DUMP, r: DUMP.r + Math.sin(k * Math.PI * 6) * 0.12 * (1 - k) };
+      can.lid.rotation.x = -1.9 * Math.min(1, k * 4);
+      if (Math.random() < 0.7) {
+        const mouth = can.group.localToWorld(armTmp.set(0, 1.3, 0));
+        spawnParticle({
+          pos: mouth.clone(), vel: new THREE.Vector3((Math.random() - 0.5) * 1.5, -3, (Math.random() - 0.5) * 1.5),
+          color: TRASH_COLORS[(Math.random() * TRASH_COLORS.length) | 0], size: 0.22 + Math.random() * 0.15, life: 0.35, grav: 20,
+        });
+      }
+      if (!g.added && k > 0.35) {
+        g.added = true;
+        collectBags(g.h);
+      }
     }
-  } else if (g.t < 1.6) {
-    const s = ease((g.t - 1.1) / 0.5);
-    can.group.position.lerpVectors(hop, g.from, s);
-    can.group.position.y += Math.sin(s * Math.PI) * 2;
-    can.group.rotation.x = (1 - s) * Math.PI * 0.9;
-    can.group.rotation.z = 0;
-    armLift = 1 - s;
+  } else if (t < GT.down[1]) {
+    close = 1;
+    if (t < GT.back[1]) pose = lerpPose(DUMP, LIFT, ease(phase(t, 'back')));
+    else pose = lerpPose(LIFT, grabPose, ease(phase(t, 'down')));
+    can.lid.rotation.x = -1.9 + 1.3 * phase(t, 'back');
+  } else if (t < GT.release[1]) {
+    pose = grabPose;
+    close = 1 - ease(phase(t, 'release'));
+    if (!g.released) {
+      g.released = true;
+      scene.attach(can.group);
+      can.group.position.copy(g.home);
+      can.group.rotation.set(0, g.rotY, 0);
+      can.lid.rotation.x = -0.6; // left ajar, as is tradition
+    }
+  } else if (t < GT.retract[1]) {
+    pose = lerpPose(grabPose, REST, ease(phase(t, 'retract')));
+    // lift straight up off the can first
+    pose.v += Math.sin(phase(t, 'retract') * Math.PI) * 0.4;
   } else {
-    can.group.position.copy(g.from);
-    can.group.rotation.set(0, can.group.rotation.y, 0);
-    can.lid.rotation.x = -0.6; // left ajar, as is tradition
     g.h.state = 'done';
     g.h.hideT = 4;
     state.grab = null;
+    Object.assign(armPose, REST, { close: 0 });
+    applyArm(armPose);
+    return;
   }
-  truck.armUpper.rotation.z = -armLift * 1.2;
-  truck.elbow.rotation.x = Math.sin(armLift * Math.PI) * 0.8;
+  g.hold = t < GT.release[1];
+  Object.assign(armPose, pose, { close });
+  applyArm(armPose);
 }
 
 function collectBags(h) {
@@ -745,7 +845,8 @@ function updateTruck(dt) {
   if (lawn) maxSpeed *= 0.5;
 
   if (T.grounded) {
-    const throttle = gas - brake;
+    const throttle = state.grab?.hold ? 0 : gas - brake;
+    if (state.grab?.hold) fwd -= Math.sign(fwd) * Math.min(Math.abs(fwd), 25 * dt);
     if (throttle > 0) {
       if (fwd < maxSpeed) fwd = Math.min(maxSpeed, fwd + accel * dt * (fwd < 0 ? 2.5 : 1));
     } else if (throttle < 0) {
@@ -1149,6 +1250,9 @@ function animateTruck(dt, time) {
   truck.body.position.y = idle * 2;
 
   for (const w of truck.wheels) w.rotation.x += (T.fwd / 0.62) * dt;
+  const fillTarget = 2.25 + (state.load / CAPACITY) * 0.95;
+  truck.fill.position.y += (fillTarget - truck.fill.position.y) * Math.min(1, dt * 4);
+  truck.fill.visible = state.load > 0 || truck.fill.position.y > 2.3;
   for (const w of truck.frontWheels) w.rotation.y = T.steer * 1.2;
 
   // Beacon blinks
@@ -1295,7 +1399,13 @@ function updateGameplay(dt) {
       m.ring.scale.setScalar(1 + Math.sin(state.time * 5) * 0.08);
       if (!state.grab && T.grounded && Math.abs(T.fwd) < 5) {
         const d = Math.hypot(h.canX - T.pos.x, h.canZ - T.pos.z);
-        if (d < 6.5) {
+        const a = d < 8 ? canToArm(canFor(h).group.position) : null;
+        const reachable = a && a.side > 0.3 && a.reach < ARM_REACH && Math.abs(a.yaw) < 1.1;
+        if (a && !reachable && d < 6 && !h.sideHinted) {
+          h.sideHinted = true;
+          popup('Claw is on the right!', pos, 'fun', 3);
+        }
+        if (reachable) {
           if (state.load >= CAPACITY) {
             if (!h.fullWarned) {
               h.fullWarned = true;
@@ -1303,7 +1413,10 @@ function updateGameplay(dt) {
               toast('No room! Empty the truck at The Dump first.');
             }
           } else startGrab(h);
-        } else h.fullWarned = false;
+        } else {
+          h.fullWarned = false;
+          if (d > 10) h.sideHinted = false;
+        }
       }
     } else if (h.state === 'done') {
       h.hideT -= dt;
@@ -1335,7 +1448,7 @@ function updateGameplay(dt) {
       D.n++;
       addScore(10);
       audio.dumpTick();
-      const hop = truck.group.localToWorld(tmpV.copy(truck.hopperLocal));
+      const hop = truck.group.localToWorld(tmpV.copy(truck.rearLocal));
       const toPile = new THREE.Vector3(world.dump.x + 13 - hop.x, 6, world.dump.z - 13 - hop.z).multiplyScalar(0.6);
       toPile.y = 8;
       for (let i = 0; i < 3; i++) {

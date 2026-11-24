@@ -374,16 +374,47 @@ export function makeTruck() {
   body.add(cyl(0.15, 0.11, 0.18, 0x55585f, 1.22, 3.75, cabZ - 1.15, 10));
   body.add(box(0.06, 0.6, 0.3, 0x55585f, 1.36, 2.2, cabZ - 1.15));
 
-  // --- Compactor body ---
+  // --- Compactor body: open hopper up front, closed dome at the back ---
   const compZ = -1.25;
-  body.add(box(2.9, 1.9, 4.4, TRUCK_GREEN, 0, 2.15, compZ));
-  const roundTop = cyl(1.45, 1.45, 4.4, TRUCK_GREEN, 0, 3.1, compZ, 20);
+  const HOP_Z = 0.3; // hopper center, lined up with the arm
+  const HOP_FRONT = 0.95;
+  const HOP_BACK = -0.35;
+  const REAR_LEN = HOP_BACK - -3.45;
+  const REAR_Z = HOP_BACK - REAR_LEN / 2;
+  const LINER = 0x2a2c31;
+  body.add(box(2.9, 1.0, 4.4, TRUCK_GREEN, 0, 1.7, compZ)); // lower body, full length
+  body.add(box(2.9, 0.9, REAR_LEN, TRUCK_GREEN, 0, 2.65, REAR_Z)); // rear upper
+  const roundTop = cyl(1.45, 1.45, REAR_LEN, TRUCK_GREEN, 0, 3.1, REAR_Z, 20);
   roundTop.rotation.x = Math.PI / 2;
   roundTop.scale.set(1, 1, 0.28);
   body.add(roundTop);
   body.add(box(2.95, 0.25, 4.45, 0xf9d849, 0, 1.6, compZ)); // yellow stripe
-  // Reinforcement ribs at both ends
-  for (const z of [compZ + 2.12, compZ - 2.12]) {
+  // Hopper walls, dark liner, rim
+  const hopLen = HOP_FRONT - HOP_BACK;
+  for (const sx of [1, -1]) {
+    body.add(box(0.12, 1.1, hopLen, TRUCK_GREEN, sx * 1.39, 2.75, HOP_Z));
+    body.add(box(0.04, 1.0, hopLen - 0.1, LINER, sx * 1.31, 2.7, HOP_Z));
+    body.add(box(0.2, 0.1, hopLen + 0.05, 0xf9d849, sx * 1.39, 3.33, HOP_Z));
+  }
+  body.add(box(2.9, 1.1, 0.12, TRUCK_GREEN, 0, 2.75, HOP_FRONT - 0.06));
+  body.add(box(2.66, 1.0, 0.04, LINER, 0, 2.7, HOP_FRONT - 0.14));
+  body.add(box(2.66, 1.0, 0.04, LINER, 0, 2.7, HOP_BACK + 0.04));
+  body.add(box(3.0, 0.1, 0.2, 0xf9d849, 0, 3.33, HOP_FRONT - 0.06));
+  body.add(box(2.66, 0.05, hopLen - 0.1, LINER, 0, 2.22, HOP_Z)); // hopper floor
+  // Trash fill inside the hopper; main.js raises it as the load grows
+  const fill = new THREE.Group();
+  fill.add(box(2.6, 0.1, hopLen - 0.2, 0x3b3530, 0, 0, 0));
+  const lumpCols = [0x2b2b2b, 0x8fd16a, 0xffd23f, 0x3d7ea6, 0xc49a6c, 0xe17055];
+  for (let i = 0; i < 9; i++) {
+    const lump = sphere(0.18 + (i % 3) * 0.06, lumpCols[i % lumpCols.length], -1.05 + (i % 5) * 0.5, 0.06, -0.35 + ((i * 7) % 4) * 0.22, 6);
+    lump.scale.y = 0.6;
+    fill.add(lump);
+  }
+  fill.position.set(0, 2.25, HOP_Z);
+  body.add(fill);
+  // Reinforcement ribs: front of hopper, hopper/dome joint, rear
+  body.add(box(2.98, 2.1, 0.14, GREEN_DARK, 0, 2.25, HOP_FRONT - 0.02));
+  for (const z of [HOP_BACK, -3.38]) {
     body.add(box(2.98, 1.9, 0.14, GREEN_DARK, 0, 2.15, z));
     const rib = cyl(1.49, 1.49, 0.14, GREEN_DARK, 0, 3.1, z, 20);
     rib.rotation.x = Math.PI / 2;
@@ -445,36 +476,57 @@ export function makeTruck() {
   });
   const logoMat = new THREE.MeshBasicMaterial({ map: logoTex, transparent: true });
   for (const side of [1, -1]) {
-    const logo = new THREE.Mesh(new THREE.PlaneGeometry(3.3, 1.3), logoMat);
-    logo.position.set(1.475 * side, 2.43, compZ);
+    const logo = new THREE.Mesh(new THREE.PlaneGeometry(2.85, 1.15), logoMat);
+    logo.position.set(1.475 * side, 2.42, REAR_Z);
     logo.rotation.y = (Math.PI / 2) * side;
     body.add(logo);
   }
 
-  // Grabber arm (right side = -x), mounted low under the logo. At rest the
-  // claw hangs by the skirt; when grabbing it swings out to the curb.
-  const arm = new THREE.Group();
-  arm.position.set(-1.6, 1.3, 0.75);
-  body.add(box(0.3, 0.3, 0.3, 0x55585f, -1.5, 1.3, 0.75)); // mount
-  const armUpper = new THREE.Group();
-  arm.add(armUpper);
-  armUpper.add(box(0.22, 0.22, 1.5, 0xffc93c, 0, 0, -0.65));
+  // Automated grabber arm on the right side (-x), under the hopper. Two
+  // links in a vertical plane that can yaw toward the can; main.js solves
+  // the joint angles (IK) so the claw lands exactly on the can.
+  const ARM = { L1: 2.1, L2: 1.9, GRIP: 0.62 };
+  const ARM_YELLOW = 0xffc93c;
+  const STEEL = 0x55585f;
+  body.add(box(0.25, 0.7, 0.7, STEEL, -1.52, 1.3, HOP_Z)); // mount plate
+  const armBase = new THREE.Group();
+  armBase.position.set(-1.72, 1.3, HOP_Z);
+  body.add(armBase);
+  const turret = cyl(0.24, 0.28, 0.35, STEEL, 0, 0, 0, 12);
+  armBase.add(turret);
+  const shoulder = new THREE.Group();
+  armBase.add(shoulder);
+  const pin = (parent) => {
+    const j = cyl(0.17, 0.17, 0.42, STEEL, 0, 0, 0, 12);
+    j.rotation.x = Math.PI / 2;
+    parent.add(j);
+  };
+  pin(shoulder);
+  // links point along -x (outward) in their local frame
+  shoulder.add(box(ARM.L1, 0.26, 0.24, ARM_YELLOW, -ARM.L1 / 2, 0, 0));
+  shoulder.add(box(ARM.L1 * 0.7, 0.08, 0.26, 0x2b2d33, -ARM.L1 / 2, 0.06, 0)); // hydraulic line
   const elbow = new THREE.Group();
-  elbow.position.set(0, 0, -1.35);
-  armUpper.add(elbow);
-  const joint = cyl(0.15, 0.15, 0.3, 0x55585f, 0, 0, 0, 10);
-  joint.rotation.z = Math.PI / 2;
-  elbow.add(joint);
-  elbow.add(box(0.2, 0.75, 0.2, 0xffc93c, 0, -0.4, 0));
-  const claw = new THREE.Group();
-  claw.position.set(0, -0.8, 0);
-  elbow.add(claw);
-  claw.add(box(0.12, 0.12, 0.8, 0x55585f, -0.12, 0, 0));
-  for (const z of [0.36, -0.36]) {
-    claw.add(box(0.4, 0.12, 0.12, 0x55585f, -0.3, 0, z));
-    claw.add(box(0.12, 0.25, 0.12, 0x55585f, -0.48, 0.1, z));
+  elbow.position.x = -ARM.L1;
+  shoulder.add(elbow);
+  pin(elbow);
+  elbow.add(box(ARM.L2, 0.22, 0.22, ARM_YELLOW, -ARM.L2 / 2, 0, 0));
+  const gripper = new THREE.Group();
+  gripper.position.x = -ARM.L2;
+  elbow.add(gripper);
+  pin(gripper);
+  // Palm plate facing outward and two fingers that close around the can
+  gripper.add(box(0.12, 0.6, 0.9, STEEL, -0.08, 0, 0));
+  const fingers = [];
+  for (const side of [1, -1]) {
+    const f = new THREE.Group();
+    f.position.set(-0.12, 0, side * 0.42);
+    f.add(box(0.75, 0.16, 0.1, STEEL, -0.37, 0, 0));
+    f.add(box(0.1, 0.16, 0.3, STEEL, -0.72, 0, -side * 0.12));
+    f.userData.side = side;
+    gripper.add(f);
+    fingers.push(f);
   }
-  body.add(arm);
+  const arm = { base: armBase, shoulder, elbow, gripper, fingers, ...ARM };
 
   // Wheels + fenders
   const wheels = [];
@@ -555,9 +607,10 @@ export function makeTruck() {
   // A tiny air freshener shaped like a pine tree (ironic)
   body.add(cone(0.08, 0.2, 0x2ecc71, -0.3, 2.95, cabZ + 0.75, 6));
 
-  const hopperLocal = new THREE.Vector3(0, 3.8, -3.5);
+  const hopperLocal = new THREE.Vector3(0, 3.4, HOP_Z); // mouth of the open hopper
+  const rearLocal = new THREE.Vector3(0, 2.5, -4.2); // rear door, for unloading
 
-  return { group, body, wheels, frontWheels, arm, armUpper, elbow, beacon, beaconMat, steve, hopperLocal, lampMat };
+  return { group, body, wheels, frontWheels, arm, beacon, beaconMat, steve, hopperLocal, rearLocal, fill, lampMat };
 }
 
 // ---------------------------------------------------------------------------

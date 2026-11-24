@@ -18,7 +18,7 @@ Then open the URL Vite prints. To build a static copy, run `npm run build`; the 
 
 You have one shift, from 6 AM to 6 PM, which takes three real minutes. Score as many points as you can.
 
-- **Grab trash:** slow down near a glowing trash can and Steve's claw grabs it automatically.
+- **Grab trash:** pull up with a glowing trash can on your **right** (the claw side) and slow down. The claw grabs it automatically.
   Grabbing cans back to back builds a **streak** bonus. **Golden cans** are worth a lot more.
 - **Dump it:** the truck holds 12 bags. Unload on the yellow pad at **The Dump** (orange dot on the
   minimap). Each bag is worth 10 points, and a completely full load earns a **+100 bonus**.
