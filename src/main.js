@@ -2,14 +2,14 @@ import * as THREE from 'three';
 import {
   buildWorld, groundHeight, isOnLawn, surfaceHeight, HALF, N, BLOCK, PITCH, ROAD, ROAD_Y, LAWN_Y, WALK_Y, roadCenter, blockCenter, rng,
 } from './world.js';
-import { makeTruck, makeCat, makeCloud, makeTreasure, makeBeachBall, makePigeon, makeGoose, makeTrashBag, nightMats, toon, glow } from './models.js';
+import { makeTruck, makeCritter, CRITTER_WORDS, makeCloud, makeTreasure, makeBeachBall, makePigeon, makeGoose, makeTrashBag, nightMats, toon, glow } from './models.js';
 import { PropBatch } from './props.js';
 import { Audio } from './audio.js';
 
 // ---------------------------------------------------------------------------
 // Tunables
 // ---------------------------------------------------------------------------
-const SHIFT = 180; // seconds per shift
+const SHIFT = 240; // seconds per shift
 const CAPACITY = 12;
 const MAX_SPEED = 24;
 const ACTIVE_CANS = 7;
@@ -81,6 +81,22 @@ const LINES = {
     'Steve apologizes to the goose. The goose does not accept.',
     'Please do not tell the other geese.',
     'Steve has learned nothing about geese.',
+  ],
+  critter: [
+    'The citizen is fine. Furious, but fine.',
+    'Steve would like to remind pedestrians that he has the right of way. He does not.',
+    'Everyone in Binsville has learned to jump. It is a survival skill now.',
+    'Steve waves an apology. It is not accepted.',
+  ],
+  garden: [
+    'The community garden club will hear about this.',
+    'Steve is harvesting. Aggressively.',
+    'Those were prize-winning cabbages. Were.',
+  ],
+  frontload: [
+    "Steve's truck also has a front loader. Truly the most capable of trucks.",
+    'Up and over! Steve ducks. Steve always ducks.',
+    'The dumpster goes over the cab. Steve does not look up.',
   ],
   prop: [
     'Steve insists that was like that already.',
@@ -276,23 +292,39 @@ scene.add(guide);
 // ---------------------------------------------------------------------------
 // Cats
 // ---------------------------------------------------------------------------
-const cats = [];
-for (let i = 0; i < 7; i++) {
-  const c = makeCat(Math.random);
+// Citizens: a mix of critters out for a stroll. Most will get out of Steve's
+// way, by running or leaping; the slow ones get bounced (gently, cartoonishly).
+const SPECIES = {
+  kitten: { n: 4, speed: 2.2, dodge: 0.8, sound: 'meow' },
+  puppy: { n: 4, speed: 2.6, dodge: 0.6, sound: 'yip' },
+  bunny: { n: 3, speed: 2.4, dodge: 0.9, sound: 'squeak', hop: true },
+  hedgehog: { n: 3, speed: 1.1, dodge: 0.25, sound: 'huff' },
+  squirrel: { n: 3, speed: 3.2, dodge: 0.85, sound: 'squeak' },
+  dalmatian: { n: 0, speed: 2.6, dodge: 0.6, sound: 'yip' },
+};
+const cats = []; // (all citizens, not just cats; the name stuck)
+function addCritter(species, spot) {
+  const c = makeCritter(species, Math.random);
   scene.add(c.group);
   const stars = new THREE.Group();
   for (let k = 0; k < 3; k++) {
-    const s = new THREE.Mesh(new THREE.OctahedronGeometry(0.15), glow(0xffd23f, 0.8));
-    s.position.set(Math.cos((k / 3) * Math.PI * 2) * 0.5, 0, Math.sin((k / 3) * Math.PI * 2) * 0.5);
-    stars.add(s);
+    const st = new THREE.Mesh(new THREE.OctahedronGeometry(0.15), glow(0xffd23f, 0.8));
+    st.position.set(Math.cos((k / 3) * Math.PI * 2) * 0.5, 0, Math.sin((k / 3) * Math.PI * 2) * 0.5);
+    stars.add(st);
   }
-  stars.position.y = 1.4;
+  stars.position.y = 1.5;
   stars.visible = false;
   c.group.add(stars);
-  cats.push({ ...c, stars, x: 0, z: 0, y: 0, h: 0, state: 'walk', t: 0, vx: 0, vz: 0, vy: 0, spin: 0, brave: false });
+  cats.push({ ...c, spec: SPECIES[species], spot, stars, x: 0, z: 0, y: 0, h: 0, state: 'walk', t: 0, vx: 0, vz: 0, vy: 0, spin: 0 });
 }
+for (const [sp, def] of Object.entries(SPECIES)) for (let i = 0; i < def.n; i++) addCritter(sp, null);
+for (const spot of world.critterSpots) addCritter(spot.species, spot);
 
 function placeCat(cat) {
+  if (cat.spot) {
+    Object.assign(cat, { x: cat.spot.x, z: cat.spot.z, y: surfaceHeight(cat.spot.x, cat.spot.z), h: Math.random() * 6, state: 'walk', t: 2 });
+    return;
+  }
   const bx = (Math.random() * N) | 0;
   const bz = (Math.random() * N) | 0;
   const side = (Math.random() * 4) | 0;
@@ -302,7 +334,7 @@ function placeCat(cat) {
   const cz = blockCenter(bz);
   const spots = [[cx + off, cz + e, Math.PI / 2], [cx + off, cz - e, -Math.PI / 2], [cx + e, cz + off, 0], [cx - e, cz + off, Math.PI]];
   const [x, z, h] = spots[side];
-  Object.assign(cat, { x, z, y: surfaceHeight(x, z), h, state: 'walk', t: Math.random() * 4, brave: Math.random() < 0.4 });
+  Object.assign(cat, { x, z, y: surfaceHeight(x, z), h, state: 'walk', t: Math.random() * 4 });
   if (Math.hypot(x - T.pos.x, z - T.pos.z) < 30) cat.x += 60 * (x > 0 ? -1 : 1);
 }
 
@@ -522,6 +554,15 @@ function drawMinimap(time) {
     mctx.fill();
     mctx.stroke();
   }
+  for (const b of world.bins) {
+    if (b.state !== 'out') continue;
+    const [x, y] = toMap(b.x, b.z);
+    mctx.fillStyle = '#ffa31a';
+    mctx.strokeStyle = '#2b2d33';
+    mctx.lineWidth = 1.5 * MK;
+    mctx.fillRect(x - 5 * MK, y - 4 * MK, 10 * MK, 8 * MK);
+    mctx.strokeRect(x - 5 * MK, y - 4 * MK, 10 * MK, 8 * MK);
+  }
   // truck
   const [tx, ty] = toMap(T.pos.x, T.pos.z);
   mctx.save();
@@ -602,6 +643,8 @@ const state = {
   snackCd: 0,
   honkCd: 0,
   grabs: [],
+  lift: null,
+  binSpawnT: 0,
   driftCharge: 0,
   boostT: 0,
   goldenHour: false,
@@ -629,7 +672,7 @@ function resetGame() {
   Object.assign(state, {
     time: 0, score: 0, load: 0, hunger: 100, hangry: false, zoomT: 0, hicT: 0, chompT: 0, snackCd: 0, honkCd: 0,
     grabs: [], driftCharge: 0, boostT: 0, goldenHour: false, spawnT: 0, streak: 0, lastCollect: -99, dumping: null, quipT: 18, shake: 0, celebrateT: 0, warned: false,
-    stats: { cans: 0, golden: 0, bags: 0, snacks: 0, bonks: 0, cats: 0, air: 0, loads: 0, doubles: 0, treasures: 0, boosts: 0, smashed: 0, geese: 0, dumped: 0 },
+    stats: { cans: 0, golden: 0, dumpsters: 0, bags: 0, snacks: 0, bonks: 0, cats: 0, air: 0, loads: 0, doubles: 0, treasures: 0, boosts: 0, smashed: 0, geese: 0, dumped: 0 },
     chaos: 0, lastSmash: -9,
   });
   for (const h of world.houses) {
@@ -648,6 +691,7 @@ function resetGame() {
   resetBalls();
   for (const pg of pigeons) placePigeon(pg);
   resetPile();
+  resetBins();
   for (const g of geese) placeGoose(g);
   for (const b of spilled) scene.remove(b.mesh);
   spilled.length = 0;
@@ -687,7 +731,7 @@ function spawnCan(silent = false) {
   if (!candidates.length) return;
   const h = candidates[(Math.random() * candidates.length) | 0];
   h.state = 'out';
-  h.golden = Math.random() < 0.13;
+  h.golden = false; // golden cans retired; the big prizes are dumpsters now
   const can = h.golden ? h.goldCan : h.can;
   can.group.visible = true;
   can.group.position.set(h.canX, 0.2, h.canZ);
@@ -956,7 +1000,7 @@ function updateTruck(dt) {
   }
 
   if (T.grounded) {
-    const holding = state.grabs.some((g) => g.hold);
+    const holding = state.grabs.some((g) => g.hold) || (state.lift && state.lift.hold);
     let throttle = holding ? 0 : gas - brake;
     if (state.boostT > 0 && !holding) throttle = 1;
     if (holding) fwd -= Math.sign(fwd) * Math.min(Math.abs(fwd), 25 * dt);
@@ -1039,6 +1083,7 @@ function updateTruck(dt) {
     const c = tmpV2.set(T.pos.x + nfx * off, 0, T.pos.z + nfz * off);
     const r = 1.6;
     for (const b of world.boxes) {
+      if (b.off) continue;
       if (c.x < b.minX - r || c.x > b.maxX + r || c.z < b.minZ - r || c.z > b.maxZ + r) continue;
       const qx = Math.max(b.minX, Math.min(c.x, b.maxX));
       const qz = Math.max(b.minZ, Math.min(c.z, b.maxZ));
@@ -1160,6 +1205,9 @@ const KINDS = {
   table: { style: 'fly', pts: 1, slow: 0.9, text: 'picnic over!', sound: 'crunch', heavy: true },
   bag: { style: 'fly', pts: 1, slow: 0.97, text: 'splat!', sound: 'bonk', light: true, debris: TRASH_COLORS },
   tire: { style: 'fly', pts: 1, slow: 0.97, text: 'boing!', sound: 'boing', light: true },
+  veggie: { style: 'fly', pts: 1, slow: 0.99, text: 'squish!', sound: 'crunch', light: true, debris: [0x6fbf4a, 0x9fd86b, 0xff8c2a] },
+  sunflower: { style: 'tip', pts: 1, slow: 0.98, text: 'timber!', sound: 'crunch' },
+  scarecrow: { style: 'tip', pts: 3, slow: 0.95, text: 'scarecrow down!', sound: 'crunch' },
 };
 
 const _q = new THREE.Quaternion();
@@ -1319,7 +1367,8 @@ function knockProp(p, nx, nz, speed) {
   // Chaos combo: wreck lots of stuff in quick succession
   state.chaos = state.time - state.lastSmash < 1.5 ? state.chaos + 1 : 1;
   state.lastSmash = state.time;
-  if (state.chaos === 1) narrate('prop', 0.2);
+  if (p.kind === 'veggie' || p.kind === 'sunflower' || p.kind === 'scarecrow') narrate('garden', 0.25);
+  else if (state.chaos === 1) narrate('prop', 0.2);
   if (state.chaos > 0 && state.chaos % 5 === 0) {
     const bonus = state.chaos * 2;
     addScore(bonus);
@@ -1332,16 +1381,24 @@ function knockProp(p, nx, nz, speed) {
 // Cats
 // ---------------------------------------------------------------------------
 function catBlocked(x, z) {
-  for (const b of world.boxes) if (x > b.minX - 0.5 && x < b.maxX + 0.5 && z > b.minZ - 0.5 && z < b.maxZ + 0.5) return true;
+  for (const b of world.boxes) if (!b.off && x > b.minX - 0.5 && x < b.maxX + 0.5 && z > b.minZ - 0.5 && z < b.maxZ + 0.5) return true;
   for (const s of world.circles) if (Math.hypot(x - s.x, z - s.z) < s.r + 0.5) return true;
   return Math.abs(x) > HALF + 3 || Math.abs(z) > HALF + 3;
 }
 
+function critterSound(c) {
+  const snd = c.spec.sound;
+  if (snd === 'meow') audio.meow();
+  else if (snd === 'yip') audio.yip();
+  else if (snd === 'huff') audio.huff();
+  else audio.squeak();
+}
+
+/** Leap sideways out of the truck's path. */
 function scareCat(c, strength = 1) {
-  if (c.state === 'fly' || c.state === 'jump') return;
+  if (c.state === 'fly' || c.state === 'jump' || c.state === 'dazed') return;
   const dx = c.x - T.pos.x;
   const dz = c.z - T.pos.z;
-  // leap perpendicular to the truck's path, away from it
   const fx = Math.sin(T.heading);
   const fz = Math.cos(T.heading);
   let sx = -fz;
@@ -1355,17 +1412,40 @@ function scareCat(c, strength = 1) {
   c.vz = sz * 9 * strength;
   c.vy = 9;
   c.h = Math.atan2(sx, sz);
-  c.brave = Math.random() < 0.35;
-  if (Math.random() < 0.5) popup(['nope!', 'eep!', 'hiss!', '!!!'][(Math.random() * 4) | 0], c.group.position, 'fun');
+  if (Math.random() < 0.5) popup(['nope!', 'eep!', '!!!', 'yikes!'][(Math.random() * 4) | 0], c.group.position, 'fun');
 }
 
 function updateCats(dt, time) {
   const speed = Math.hypot(T.vel.x, T.vel.z);
+  const fx = Math.sin(T.heading);
+  const fz = Math.cos(T.heading);
   for (const c of cats) {
     c.t -= dt;
-    const dist = Math.hypot(c.x - T.pos.x, c.z - T.pos.z);
-    if (c.state === 'walk' || c.state === 'sit') {
-      if (c.t <= 0) {
+    const dx = c.x - T.pos.x;
+    const dz = c.z - T.pos.z;
+    const dist = Math.hypot(dx, dz);
+    // How squarely the truck is bearing down on this critter
+    const approaching = (dx * T.vel.x + dz * T.vel.z) / ((dist || 1) * (speed || 1));
+    const lateral = Math.abs(dx * -fz + dz * fx); // distance from the truck's path
+    const ground = c.state === 'walk' || c.state === 'sit' || c.state === 'flee';
+    if (ground) {
+      // Truck coming? Scurry sideways out of its path.
+      if (c.state !== 'flee' && dist < 18 && speed > 5 && approaching > 0.6 && lateral < 4 && T.y < 1) {
+        c.state = 'flee';
+        c.t = 1.4;
+        let sx = -fz;
+        let sz = fx;
+        if (sx * dx + sz * dz < 0) {
+          sx = -sx;
+          sz = -sz;
+        }
+        c.h = Math.atan2(sx, sz);
+        c.dodgeRoll = Math.random() < c.spec.dodge;
+      }
+      if (c.state === 'flee') {
+        if (c.t <= 0) c.state = 'walk';
+        if (dist < 7 && speed > 5 && approaching > 0.5 && c.dodgeRoll) scareCat(c);
+      } else if (c.t <= 0) {
         if (c.state === 'walk' && Math.random() < 0.35) {
           c.state = 'sit';
           c.t = 2 + Math.random() * 3;
@@ -1375,9 +1455,10 @@ function updateCats(dt, time) {
           c.t = 2 + Math.random() * 4;
         }
       }
-      if (c.state === 'walk') {
-        const nx = c.x + Math.sin(c.h) * 2.2 * dt;
-        const nz = c.z + Math.cos(c.h) * 2.2 * dt;
+      if (c.state === 'walk' || c.state === 'flee') {
+        const v = c.spec.speed * (c.state === 'flee' ? 2.6 : 1);
+        const nx = c.x + Math.sin(c.h) * v * dt;
+        const nz = c.z + Math.cos(c.h) * v * dt;
         if (catBlocked(nx, nz)) c.h += Math.PI * (0.5 + Math.random());
         else {
           c.x = nx;
@@ -1385,31 +1466,30 @@ function updateCats(dt, time) {
           c.y = surfaceHeight(nx, nz);
         }
       }
-      // Truck approaching?
-      const approaching = (c.x - T.pos.x) * T.vel.x + (c.z - T.pos.z) * T.vel.z > 0;
-      if (dist < 9 && speed > 5 && approaching && !c.brave && T.y < 1) scareCat(c);
-      // Collision
-      if (dist < 3.4 && T.y < 1.5) {
+      // Bounced!
+      if (dist < 3.4 && T.y < 1.5 && c.state !== 'jump') {
         for (const off of [1.9, -1.9]) {
-          const d = Math.hypot(c.x - (T.pos.x + Math.sin(T.heading) * off), c.z - (T.pos.z + Math.cos(T.heading) * off));
+          const d = Math.hypot(c.x - (T.pos.x + fx * off), c.z - (T.pos.z + fz * off));
           if (d < 2.1) {
             if (speed > 3) {
               c.state = 'fly';
-              c.vx = T.vel.x * 0.8 + (c.x - T.pos.x) * 1.5;
-              c.vz = T.vel.z * 0.8 + (c.z - T.pos.z) * 1.5;
-              c.vy = 12;
+              const k = c.species === 'hedgehog' ? 1.4 : 1; // hedgehogs curl up and really go
+              c.vx = (T.vel.x * 0.8 + dx * 1.5) * k;
+              c.vz = (T.vel.z * 0.8 + dz * 1.5) * k;
+              c.vy = 11 * k;
               c.spin = 14;
-              audio.meow();
+              critterSound(c);
               if (state.mode === 'playing') {
-                addScore(-15);
+                addScore(-5);
                 state.stats.cats++;
-                popup('MRRROW! -15', c.group.position.clone(), 'bad');
-                if (state.stats.cats === 1) toast('The cat is fine. The cat is FURIOUS, but fine.');
+                const words = CRITTER_WORDS[c.species];
+                popup(`${words[(Math.random() * words.length) | 0]} -5`, c.group.position.clone(), 'bad');
+                if (state.stats.cats === 1) narrate('critter', 1, true);
+                else narrate('critter', 0.3);
               }
             } else {
-              // nudge
-              c.x += (c.x - T.pos.x) * 0.1;
-              c.z += (c.z - T.pos.z) * 0.1;
+              c.x += dx * 0.1;
+              c.z += dz * 0.1;
             }
             break;
           }
@@ -1434,7 +1514,7 @@ function updateCats(dt, time) {
         c.body.rotation.x = 0;
         if (c.state === 'fly') {
           c.state = 'dazed';
-          c.t = 3;
+          c.t = 2.5;
           c.stars.visible = true;
         } else {
           c.state = 'walk';
@@ -1452,10 +1532,18 @@ function updateCats(dt, time) {
     }
     c.group.position.set(c.x, c.y, c.z);
     c.group.rotation.y = c.h;
-    const walkBob = c.state === 'walk' ? Math.abs(Math.sin(time * 12 + c.x)) * 0.08 : 0;
-    c.body.position.y = walkBob;
-    c.body.scale.y = c.state === 'sit' ? 0.85 : 1;
-    c.tail.rotation.z = Math.sin(time * 3 + c.z) * 0.5;
+    const moving = c.state === 'walk' || c.state === 'flee';
+    const rate = c.state === 'flee' ? 22 : 12;
+    if (c.spec.hop) {
+      // bunnies hop
+      c.body.position.y = moving ? Math.abs(Math.sin(time * rate * 0.6 + c.x)) * 0.35 : 0;
+    } else {
+      c.body.position.y = moving ? Math.abs(Math.sin(time * rate + c.x)) * 0.05 : 0;
+      c.legs.forEach((l, i) => (l.rotation.x = moving ? Math.sin(time * rate + (i % 2 === (i < 2 ? 0 : 1) ? 0 : Math.PI)) * 0.6 : 0));
+    }
+    c.body.scale.y = c.state === 'sit' ? 0.88 : 1;
+    c.head.rotation.z = c.state === 'sit' ? Math.sin(time * 1.5 + c.z) * 0.15 : 0;
+    c.tail.rotation.z = Math.sin(time * (c.state === 'flee' ? 14 : 3) + c.z) * 0.5;
   }
 }
 
@@ -1464,6 +1552,7 @@ function updateCats(dt, time) {
 // ---------------------------------------------------------------------------
 let blinkT = 2;
 let steveLean = 0;
+let duckAmt = 0;
 
 function animateTruck(dt, time) {
   // Spring squash
@@ -1579,7 +1668,10 @@ function animateTruck(dt, time) {
   head.rotation.y += (headY - head.rotation.y) * Math.min(1, dt * 8);
   head.rotation.z = (head.userData.baseTilt || 0) + headZ;
   const cele = state.celebrateT > 0 ? Math.abs(Math.sin(state.celebrateT * 12)) * 0.08 : 0;
-  steve.group.position.y = steve.group.userData.baseY + cele + (T.grounded ? 0 : 0.1);
+  const ducking = state.lift && state.lift.t > 0.55 && state.lift.t < LTT.lower[1];
+  duckAmt += ((ducking ? 1 : 0) - duckAmt) * Math.min(1, dt * 10);
+  steve.group.position.y = steve.group.userData.baseY + cele + (T.grounded ? 0 : 0.1) - duckAmt * 0.45;
+  steve.head.position.y = 1.12 - duckAmt * 0.12;
   // Both paws on the wheel; the outer one waves out the doorway when celebrating
   const waving = state.celebrateT > 0;
   // arms[1] is his doorway-side (right) arm: it grabs the frame when reversing
@@ -1711,6 +1803,7 @@ function updateGameplay(dt) {
     }
   }
   updateGrabs(dt);
+  updateBins(dt);
 
   // Dump
   const dd = Math.hypot(world.dump.x - T.pos.x, world.dump.z - T.pos.z);
@@ -1938,6 +2031,7 @@ function updateCamera(dt, time) {
 // ---------------------------------------------------------------------------
 let fountainT = 0;
 function updateAmbient(dt, time) {
+  for (const f of world.flags) f.rotation.y = Math.sin(time * 1.7) * 0.35;
   clouds.rotation.y = time * 0.004;
   fountainT -= dt;
   if (fountainT <= 0) {
@@ -1973,6 +2067,11 @@ function updateAmbient(dt, time) {
 // ---------------------------------------------------------------------------
 // HUD
 // ---------------------------------------------------------------------------
+function fmtCountdown(left) {
+  const s = Math.max(0, Math.ceil(left));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
 function fmtClock(t) {
   const minutes = 6 * 60 + (t / SHIFT) * 12 * 60;
   let h = Math.floor(minutes / 60);
@@ -1984,7 +2083,7 @@ function fmtClock(t) {
 
 function updateHud() {
   hud.score.textContent = state.score;
-  hud.clock.textContent = fmtClock(Math.min(SHIFT, state.time));
+  hud.clock.textContent = fmtCountdown(SHIFT - state.time);
   hud.clock.style.color = SHIFT - state.time < 30 ? '#e17055' : '';
   hud.loadText.textContent = `${state.load}/${CAPACITY}`;
   hud.loadBar.style.width = `${(state.load / CAPACITY) * 100}%`;
@@ -2014,6 +2113,16 @@ function updateGuide(time) {
     col = 0xff7a1a;
   } else {
     let best = Infinity;
+    for (const b of world.bins) {
+      if (b.state !== 'out' || state.load > CAPACITY - DUMPSTER_BAGS) continue;
+      const d = Math.hypot(b.x - T.pos.x, b.z - T.pos.z) * 0.6;
+      if (d < best) {
+        best = d;
+        tx = b.x;
+        tz = b.z;
+        col = 0xffa31a;
+      }
+    }
     for (const h of world.houses) {
       if (h.state !== 'out') continue;
       const d = Math.hypot(h.canX - T.pos.x, h.canZ - T.pos.z) * (h.golden ? 0.6 : 1);
@@ -2040,6 +2149,193 @@ function updateGuide(time) {
     T.pos.z + Math.cos(T.heading) * 3.5 + Math.cos(ang) * 1.5,
   );
   guide.rotation.y = ang;
+}
+
+// ---------------------------------------------------------------------------
+// Dumpsters + the front loader: drive up to a full dumpster head-on and the
+// forks lift it up and over the cab into the hopper.
+// ---------------------------------------------------------------------------
+const LOADER = truck.loader;
+const LREST = { r: 0.35, L: 3.4, tilt: 0 };
+const LTOP = { r: -1.78, L: 4.4, tilt: -2.4 };
+const loaderPose = { ...LREST };
+const DUMPSTER_BAGS = 6;
+
+function applyLoader(p) {
+  LOADER.pivot.rotation.x = p.r;
+  for (const s of LOADER.sliders) s.scale.z = Math.max(0.01, p.L - LOADER.sliderStart);
+  LOADER.forks.position.z = p.L;
+  LOADER.forks.rotation.x = p.tilt - p.r;
+}
+applyLoader(loaderPose);
+
+const lerpL = (a, b, k) => ({ r: a.r + (b.r - a.r) * k, L: a.L + (b.L - a.L) * k, tilt: a.tilt + (b.tilt - a.tilt) * k });
+
+/** Loader pose that puts the forks into the sleeves of a dumpster at world point p. */
+function binToLoader(p) {
+  truck.body.worldToLocal(armTmp.copy(p));
+  armTmp.y += 0.95;
+  armTmp.z -= 0.9;
+  armTmp.x = 0;
+  armTmp.sub(LOADER.P);
+  return { r: Math.atan2(-armTmp.y, armTmp.z), L: Math.min(6.8, Math.max(3, armTmp.length())), tilt: 0 };
+}
+const loaderSwing = (from, k) => ({
+  r: from.r + (LTOP.r - from.r) * k,
+  L: from.L + (LTOP.L - from.L) * k,
+  tilt: LTOP.tilt * ease(Math.max(0, Math.min(1, (k - 0.55) / 0.45))),
+});
+
+const LT = { reach: 0.5, grip: 0.15, lift: 0.95, dump: 0.6, lower: 0.85, release: 0.15, retract: 0.4 };
+const LTT = {};
+{
+  let t = 0;
+  for (const k of Object.keys(LT)) {
+    LTT[k] = [t, t + LT[k]];
+    t += LT[k];
+  }
+}
+const lphase = (t, k) => Math.max(0, Math.min(1, (t - LTT[k][0]) / LT[k]));
+
+function resetBins() {
+  state.lift = null;
+  Object.assign(loaderPose, LREST);
+  applyLoader(loaderPose);
+  for (const b of world.bins) {
+    if (b.group.parent !== scene) scene.attach(b.group);
+    b.group.position.copy(b.home);
+    b.group.rotation.set(0, b.facing, 0);
+    b.group.scale.set(1, 1, 1);
+    b.collider.off = false;
+    b.state = 'idle';
+    b.cooldown = 0;
+    b.marker.group.visible = false;
+  }
+  state.binSpawnT = 0;
+  // one is waiting right from the start
+  setBinFull(world.bins[(Math.random() * world.bins.length) | 0]);
+}
+
+function setBinFull(b) {
+  b.state = 'out';
+  b.marker.group.visible = true;
+}
+
+function updateBins(dt) {
+  // Keep a couple of full dumpsters around town
+  state.binSpawnT -= dt;
+  if (state.binSpawnT <= 0) {
+    state.binSpawnT = 18;
+    const out = world.bins.filter((b) => b.state === 'out').length;
+    const idle = world.bins.filter((b) => b.state === 'idle' && b.cooldown <= 0 && Math.hypot(b.x - T.pos.x, b.z - T.pos.z) > 40);
+    if (out < 2 && idle.length) {
+      setBinFull(idle[(Math.random() * idle.length) | 0]);
+      if (state.mode === 'playing') toast('🗑️ A dumpster somewhere is overflowing. Steve can feel it.', 3);
+    }
+  }
+  for (const b of world.bins) {
+    if (b.cooldown > 0) b.cooldown -= dt;
+    if (b.state !== 'out') continue;
+    b.marker.arrow.position.y = 3 + Math.sin(state.time * 4) * 0.3;
+    b.marker.arrow.rotation.y += dt * 3;
+    // Full dumpsters rattle when the truck is near
+    const near = Math.hypot(b.x - T.pos.x, b.z - T.pos.z) < 22;
+    b.group.rotation.z = near ? Math.sin(state.time * 16 + b.x) * 0.025 : 0;
+    if (state.lift || !T.grounded || Math.abs(T.fwd) > 4) continue;
+    truck.group.worldToLocal(armTmp.copy(b.home));
+    const lx = armTmp.x;
+    const lz = armTmp.z;
+    if (lz < 3 || lz > 10 || Math.abs(lx) > 4) continue;
+    // Facing it squarely?
+    let dh = T.heading - (b.facing + Math.PI);
+    while (dh > Math.PI) dh -= Math.PI * 2;
+    while (dh < -Math.PI) dh += Math.PI * 2;
+    if (lz > 4.4 && lz < 8.6 && Math.abs(lx) < 1.4 && Math.abs(dh) < 0.5) {
+      startLift(b);
+    } else if (!b.hinted && lz < 9) {
+      b.hinted = true;
+      popup('Line up head-on!', truck.group.position, 'fun', 4);
+    }
+  }
+  updateLift(dt);
+}
+
+function startLift(b) {
+  b.state = 'lifting';
+  b.hinted = false;
+  b.marker.group.visible = false;
+  b.group.rotation.z = 0;
+  state.lift = { b, t: 0, attached: false, added: false, released: false, hold: true };
+  audio.grab();
+}
+
+function updateLift(dt) {
+  const L = state.lift;
+  if (!L) {
+    Object.assign(loaderPose, lerpL(loaderPose, LREST, 1 - Math.exp(-8 * dt)));
+    applyLoader(loaderPose);
+    return;
+  }
+  truck.body.updateMatrixWorld(true);
+  L.t += dt;
+  const t = L.t;
+  const b = L.b;
+  const grab = binToLoader(b.home);
+  let pose;
+  if (t < LTT.reach[1]) pose = lerpL(LREST, grab, ease(lphase(t, 'reach')));
+  else if (t < LTT.grip[1]) pose = grab;
+  else if (t < LTT.dump[1]) {
+    if (!L.attached) {
+      L.attached = true;
+      b.collider.off = true;
+      LOADER.forks.attach(b.group);
+      audio.clang();
+    }
+    if (t < LTT.lift[1]) pose = loaderSwing(grab, ease(lphase(t, 'lift')));
+    else {
+      const k = lphase(t, 'dump');
+      pose = { ...LTOP, tilt: LTOP.tilt + Math.sin(k * Math.PI * 6) * 0.1 * (1 - k) };
+      if (Math.random() < 0.8) {
+        const mouth = b.group.localToWorld(armTmp.set((Math.random() - 0.5) * 2.4, 1.6, (Math.random() - 0.5) * 1.2));
+        spawnParticle({
+          pos: mouth.clone(), vel: new THREE.Vector3((Math.random() - 0.5) * 1.5, -6, (Math.random() - 0.5) * 1.5),
+          color: TRASH_COLORS[(Math.random() * TRASH_COLORS.length) | 0], size: 0.3 + Math.random() * 0.2, life: 0.6, grav: 20,
+        });
+      }
+      if (!L.added && k > 0.35) {
+        L.added = true;
+        const got = Math.min(DUMPSTER_BAGS, CAPACITY - state.load);
+        state.load += got;
+        state.stats.dumpsters++;
+        state.stats.bags += got;
+        addScore(30);
+        audio.golden();
+        popup(`FRONT LOAD! +${got} bags`, truck.group.position, 'gold', 5);
+        narrate('frontload', state.stats.dumpsters === 1 ? 1 : 0.4, state.stats.dumpsters === 1);
+        if (state.load >= CAPACITY) toast('🚛 Truck is FULL! Head to The Dump (orange on the map).');
+      }
+    }
+  } else if (t < LTT.lower[1]) pose = loaderSwing(grab, 1 - ease(lphase(t, 'lower')));
+  else if (t < LTT.release[1]) {
+    pose = grab;
+    if (!L.released) {
+      L.released = true;
+      scene.attach(b.group);
+      b.group.position.copy(b.home);
+      b.group.rotation.set(0, b.facing, 0);
+      b.group.scale.set(1, 1, 1);
+      b.collider.off = false;
+      b.state = 'idle';
+      b.cooldown = 35;
+    }
+  } else if (t < LTT.retract[1]) pose = lerpL(grab, LREST, ease(lphase(t, 'retract')));
+  else {
+    state.lift = null;
+    pose = LREST;
+  }
+  if (state.lift) L.hold = t < LTT.release[1];
+  Object.assign(loaderPose, pose);
+  applyLoader(loaderPose);
 }
 
 // ---------------------------------------------------------------------------
@@ -2329,6 +2625,7 @@ function updateBalls(dt) {
     }
     // Bounce off buildings, trees and the edge of town
     for (const w of world.boxes) {
+      if (w.off) continue;
       const qx = Math.max(w.minX, Math.min(b.pos.x, w.maxX));
       const qz = Math.max(w.minZ, Math.min(b.pos.z, w.maxZ));
       const ex = b.pos.x - qx;
@@ -2540,7 +2837,7 @@ function startShift() {
   $('results').classList.add('hidden');
   $('hud').classList.remove('hidden');
   hud.toast.innerHTML = '';
-  toast("☀️ Good morning, Steve! Grab the glowing trash cans. Shift ends at 6 PM.", 4);
+  toast('☀️ Good morning, Steve! Empty the glowing trash cans before the sun goes down.', 4);
 }
 
 function brendaSays(stars, st) {
@@ -2568,7 +2865,8 @@ function endShift() {
   const st = state.stats;
   const rows = [
     ['Final score', s],
-    ['Cans emptied', `${st.cans}${st.golden ? ` (${st.golden} golden)` : ''}`],
+    ['Cans emptied', st.cans],
+    ['Dumpsters hoisted over the cab', st.dumpsters],
     ['Bags delivered to The Dump', st.dumped],
     ['Cargo eaten "for quality control"', st.snacks],
     ['Longest airtime', `${st.air.toFixed(1)}s`],
@@ -2577,7 +2875,7 @@ function endShift() {
     ['Double grabs', st.doubles],
     ['Boosts', st.boosts],
     ['Geese disrespected', st.geese],
-    ['Cats offended', st.cats],
+    ['Citizens bounced', st.cats],
   ];
   $('review').textContent = `${brendaSays(stars, st)} - Brenda (possum), Regional Manager`;
   $('resultTable').innerHTML = rows.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('');
@@ -2670,4 +2968,4 @@ function frame() {
 frame();
 
 // Handy for debugging / automated screenshots
-window.__steve = { state, T, keys, startShift, world, renderer, geese };
+window.__steve = { state, T, keys, startShift, world, renderer, geese, cats };

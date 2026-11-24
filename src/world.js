@@ -5,7 +5,8 @@ import {
   toon, box, cyl, sphere, makeHouse, makeTree, makeBush, makeTrashCan, makeMarker, makeMailbox,
   makeHydrant, makeCone, makeTrashPile, makeSign, makeRamp, makeSeagull, makeLampPost, makeBench,
   makeFlowerBed, makePicnicTable, makeDumpster, makeBooth, makeStatue, makeTrashBag, makeTire,
-  makeFlamingo, makeGnome, makePicketFence,
+  makeFlamingo, makeGnome, makePicketFence, makeBar, makeSchool, makeFlagpole, makeSchoolBus, makePlayground,
+  makeFirehouse, makeFireEngine, makeShed, makeScarecrow, makeCabbage, makePumpkin, makeSunflower, makeCarrots,
 } from './models.js';
 import { PropBatch } from './props.js';
 
@@ -64,12 +65,19 @@ export function buildWorld(scene) {
     bushes: [], // {x,z} drive-through bushes (leaf bursts)
     balls: [], // beach ball spawn spots
     pigeonSpots: [],
+    bins: [], // dumpsters the front loader can lift
+    critterSpots: [], // special spawn points for citizens (the firehouse dog)
+    flags: [],
   };
   world.batches = {
     lamp: new PropBatch(scene, makeLampPost(), 140),
     fence: new PropBatch(scene, makePicketFence(), 900),
     flamingo: new PropBatch(scene, makeFlamingo(), 120),
     gnome: new PropBatch(scene, makeGnome(), 120),
+    cabbage: new PropBatch(scene, makeCabbage(), 40),
+    pumpkin: new PropBatch(scene, makePumpkin(), 40),
+    carrots: new PropBatch(scene, makeCarrots(), 40),
+    sunflower: new PropBatch(scene, makeSunflower(), 40),
   };
 
   // Grass all around, one asphalt slab for every road (no z-fighting)
@@ -131,6 +139,10 @@ export function buildWorld(scene) {
   types[idx(3, 3)] = 'park';
   types[idx(0, 4)] = 'park';
   types[idx(2, 2)] = 'plaza';
+  types[idx(2, 0)] = 'bar';
+  types[idx(0, 2)] = 'school';
+  types[idx(4, 3)] = 'firehouse';
+  types[idx(2, 4)] = 'garden';
 
   const streetNames = ['Maple', 'Acorn', 'Biscuit', 'Wobble', 'Pickle', 'Noodle', 'Puddle', 'Crumb', 'Clover', 'Muffin'];
   const familyNames = [
@@ -149,7 +161,7 @@ export function buildWorld(scene) {
       const slab = box(BLOCK, WALK_Y, BLOCK, 0xd9d4c7, cx, WALK_Y / 2, cz);
       slab.castShadow = false;
       S.add(slab);
-      const lawnCol = type === 'plaza' ? 0xe8dcc0 : type === 'dump' ? 0xb39a72 : 0x8fd16a;
+      const lawnCol = type === 'plaza' ? 0xe8dcc0 : type === 'dump' ? 0xb39a72 : type === 'garden' ? 0x7cc35a : 0x8fd16a;
       const lawn = box(BLOCK - 3, LAWN_Y, BLOCK - 3, lawnCol, cx, LAWN_Y / 2, cz);
       lawn.castShadow = false;
       S.add(lawn);
@@ -163,6 +175,10 @@ export function buildWorld(scene) {
       else if (type === 'park') buildPark(S, scene, world, rand, cx, cz);
       else if (type === 'dump') buildDump(S, scene, world, rand, cx, cz);
       else if (type === 'plaza') buildPlaza(S, scene, world, rand, cx, cz);
+      else if (type === 'bar') buildBar(S, scene, world, rand, cx, cz);
+      else if (type === 'school') buildSchool(S, scene, world, rand, cx, cz);
+      else if (type === 'firehouse') buildFirehouse(S, scene, world, rand, cx, cz);
+      else if (type === 'garden') buildGarden(S, scene, world, rand, cx, cz);
     }
   }
 
@@ -559,6 +575,7 @@ function buildPlaza(S, scene, world, rand, cx, cz) {
   const sign = makeSign(['OUR HERO', '(unknown raccoon)'], '#6c5ce7', 5, 1.7);
   addProp(scene, world, sign, cx + 10.6, cz + 10.6, 1.2, 'sign', Math.PI / 4);
   world.balls.push([cx - 10, cz + 4], [cx + 4, cz - 11]);
+  addBin(S, scene, world, cx, cz - (BLOCK / 2 - 1.7), Math.PI, 0x2d936c);
   world.pigeonSpots.push({ x: cx, z: cz, r: 11 });
 
   // Benches facing the fountain, flower beds and trees in the corners
@@ -695,6 +712,153 @@ function buildDump(S, scene, world, rand, cx, cz) {
     scene.add(g.group);
     world.seagulls.push(g);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Special blocks
+// ---------------------------------------------------------------------------
+
+/** Static AABB collider for a footprint centered at (x, z). */
+function solid(world, x, z, w, d) {
+  const b = { minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2 };
+  world.boxes.push(b);
+  return b;
+}
+
+function paving(S, x, z, w, d, color = 0xc7c2b4) {
+  const m = box(w, 0.04, d, color, x, LAWN_Y + 0.02, z);
+  m.castShadow = false;
+  S.add(m);
+}
+
+/** A big dumpster at the curb, facing the road, for the front loader. */
+function addBin(S, scene, world, x, z, facing, color) {
+  const g = makeDumpster(color);
+  g.position.set(x, WALK_Y, z);
+  g.rotation.y = facing;
+  scene.add(g);
+  const alongX = Math.abs(Math.sin(facing)) < 0.5; // long side runs along x
+  const collider = solid(world, x, z, alongX ? 3.6 : 2.2, alongX ? 2.2 : 3.6);
+  const marker = makeMarker(true);
+  marker.group.position.set(x, WALK_Y, z);
+  marker.group.scale.setScalar(1.7);
+  marker.group.visible = false;
+  scene.add(marker.group);
+  world.bins.push({ x, z, facing, group: g, collider, marker, state: 'idle', cooldown: 0, home: g.position.clone() });
+}
+
+function cornerTrees(S, world, rand, cx, cz, skip = []) {
+  for (const [sx, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+    if (skip.some(([a, b]) => a === sx && b === sz)) continue;
+    const tr = makeTree(rand, 1 + rand() * 0.3);
+    tr.position.set(cx + sx * 15.5, LAWN_Y, cz + sz * 15.5);
+    S.add(tr);
+    treeCircle(world, cx + sx * 15.5, cz + sz * 15.5, 0.9);
+  }
+}
+
+function buildBar(S, scene, world, rand, cx, cz) {
+  const bar = makeBar();
+  bar.position.set(cx, LAWN_Y, cz + 1);
+  S.add(bar);
+  solid(world, cx, cz + 1, 16.4, 10.4);
+  paving(S, cx, cz + 11, 17, 8, 0xb89a74); // wooden patio deck
+  paving(S, cx, cz + 16.5, 3, 4); // path to the sidewalk
+  for (const x of [-5, 0, 5]) addProp(scene, world, makePicnicTable(), cx + x, cz + 11, 1.2, 'table', rand() * 0.4 - 0.2);
+  for (const s of [-7.5, 7.5]) world.circles.push({ x: cx + s, z: cz + 8.5, r: 0.2 });
+  // parking lot out back, with the dumpster
+  paving(S, cx, cz - 12, 30, 11, 0x6a6f7b);
+  for (let x = -12; x <= 12; x += 4) paving(S, cx + x, cz - 12, 0.15, 5, 0xfffbe8);
+  addBin(S, scene, world, cx + 6, cz - (BLOCK / 2 - 1.7), Math.PI, 0x3d7ea6);
+  cornerTrees(S, world, rand, cx, cz, [[1, -1], [-1, -1]]);
+  for (let k = 0; k < 2; k++) addBatchProp(world, 'gnome', cx + 9 + k, cz + 7.5, 0.4, 'gnome', rand() * 6);
+}
+
+function buildSchool(S, scene, world, rand, cx, cz) {
+  const school = makeSchool();
+  school.position.set(cx, LAWN_Y, cz - 7);
+  S.add(school);
+  solid(world, cx, cz - 7, 22.4, 9.4);
+  solid(world, cx, cz - 1.8, 5.2, 1.6);
+  paving(S, cx, cz + 6, 6, 21); // front walk
+  const flag = makeFlagpole();
+  flag.position.set(cx + 7, LAWN_Y, cz + 2);
+  scene.add(flag);
+  world.flags.push(flag.userData.flag);
+  world.circles.push({ x: cx + 7, z: cz + 2, r: 0.25 });
+  const pg = makePlayground();
+  pg.position.set(cx - 9, LAWN_Y, cz + 8);
+  S.add(pg);
+  world.circles.push({ x: cx - 9, z: cz + 8.5, r: 1.6 }, { x: cx - 4.5, z: cz + 8, r: 1.8 });
+  // the bus waits by the curb
+  paving(S, cx + 11, cz + 9, 4, 12, 0x6a6f7b);
+  const bus = makeSchoolBus();
+  bus.position.set(cx + 11, LAWN_Y, cz + 9);
+  S.add(bus);
+  solid(world, cx + 11, cz + 9, 2.8, 10.6);
+  addBin(S, scene, world, cx + (BLOCK / 2 - 1.7), cz - 8, Math.PI / 2, 0x2d936c);
+  cornerTrees(S, world, rand, cx, cz, [[1, 1], [1, -1]]);
+  // hopscotch
+  for (let i = 0; i < 6; i++) paving(S, cx - 2.5, cz + 2 + i * 1.1, 1, 1, i % 2 ? 0xfff3b0 : 0xffb3c1);
+}
+
+function buildFirehouse(S, scene, world, rand, cx, cz) {
+  const fh = makeFirehouse();
+  fh.position.set(cx - 3, LAWN_Y, cz - 3);
+  S.add(fh);
+  solid(world, cx - 3, cz - 3, 16.4, 11.4);
+  solid(world, cx + 6.5, cz - 6.5, 3.4, 3.4);
+  paving(S, cx - 3, cz + 10.5, 16, 15.5); // concrete apron to the street
+  for (let x = -9; x <= 3; x += 6) paving(S, cx + x, cz + 10.5, 0.2, 15, 0xffd23f);
+  const engine = makeFireEngine();
+  engine.position.set(cx - 7, LAWN_Y, cz + 3.5);
+  S.add(engine);
+  solid(world, cx - 7, cz + 3.5, 2.8, 7.6);
+  addProp(scene, world, makeHydrant(), cx + 7, cz + 4, 0.4, 'hydrant');
+  addProp(scene, world, makeHydrant(), cx - 12.5, cz + 4, 0.4, 'hydrant');
+  addBin(S, scene, world, cx + (BLOCK / 2 - 1.7), cz + 9, Math.PI / 2, 0xc8402e);
+  world.critterSpots.push({ species: 'dalmatian', x: cx + 3, z: cz + 6 });
+  cornerTrees(S, world, rand, cx, cz, [[1, 1], [-1, 1]]);
+}
+
+function buildGarden(S, scene, world, rand, cx, cz) {
+  // Picket fence all the way round, with gates in the middle of each side
+  const E = BLOCK / 2 - 2.2;
+  for (const [nx, nz] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+    for (let t = -E + 1.2; t <= E - 1.2; t += 2.4) {
+      if (Math.abs(t) < 3.6) continue;
+      const x = cx + nx * E + (nz !== 0 ? t : 0);
+      const z = cz + nz * E + (nx !== 0 ? t : 0);
+      addBatchProp(world, 'fence', x, z, 0.9, 'fence', Math.atan2(nx, nz));
+    }
+  }
+  // Raised beds of vegetables that are, frankly, in harm's way
+  const kinds = ['cabbage', 'pumpkin', 'carrots', 'cabbage'];
+  [-10.5, -3.5, 3.5, 10.5].forEach((z, row) => {
+    for (const side of [-1, 1]) {
+      const bx = cx + side * 8.5;
+      const bed = box(12, 0.3, 3, 0x6b4a2f, bx, LAWN_Y + 0.15, cz + z);
+      bed.castShadow = false;
+      S.add(bed);
+      for (let i = 0; i < 5; i++) {
+        addBatchProp(world, kinds[row], bx - 4.8 + i * 2.4, cz + z, 0.5, 'veggie', rand() * 6);
+      }
+    }
+  });
+  // Sunflowers along the inside of the fence
+  for (let t = -14; t <= 14; t += 3.5) {
+    if (Math.abs(t) < 4) continue;
+    addBatchProp(world, 'sunflower', cx + t, cz - E + 1.3, 0.4, 'sunflower', rand() * 0.6 - 0.3);
+    addBatchProp(world, 'sunflower', cx + t, cz + E - 1.3, 0.4, 'sunflower', Math.PI + rand() * 0.6 - 0.3);
+  }
+  addProp(scene, world, makeScarecrow(), cx, cz + 0.5, 0.6, 'scarecrow', 0.3);
+  const shed = makeShed();
+  shed.position.set(cx + 13, LAWN_Y, cz - 13);
+  shed.rotation.y = Math.PI / 4;
+  S.add(shed);
+  world.circles.push({ x: cx + 13, z: cz - 13, r: 2.4 });
+  for (let k = 0; k < 3; k++) addBatchProp(world, 'gnome', cx - 14 + k * 1.2, cz - 14, 0.4, 'gnome', rand() * 6);
+  world.critterSpots.push({ species: 'bunny', x: cx - 5, z: cz }, { species: 'bunny', x: cx + 5, z: cz + 7 });
 }
 
 /** Ground height (surface + ramps) at a point. */

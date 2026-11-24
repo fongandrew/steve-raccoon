@@ -618,10 +618,40 @@ export function makeTruck() {
   // A tiny air freshener shaped like a pine tree (ironic)
   body.add(cone(0.08, 0.2, 0x2ecc71, 0.3, 2.95, cabZ + 0.75, 6));
 
+  // Front loader: two telescoping arms pivoting behind the cab, with forks
+  // that slide into a dumpster's sleeves and lift it over the cab into the
+  // hopper. Truly the most capable of trucks.
+  const LOADER_P = new THREE.Vector3(0, 3.5, 1.2);
+  const loaderPivot = new THREE.Group();
+  loaderPivot.position.copy(LOADER_P);
+  body.add(loaderPivot);
+  const sliderGeo = new THREE.BoxGeometry(0.16, 0.22, 1);
+  sliderGeo.translate(0, 0, 0.5);
+  const sliders = [];
+  for (const s of [1, -1]) {
+    body.add(box(0.3, 2.7, 0.4, 0x55585f, s * 1.62, 2.2, LOADER_P.z)); // post
+    const pinMesh = cyl(0.2, 0.2, 0.3, 0x55585f, s * 1.75, 0, 0, 12);
+    pinMesh.rotation.z = Math.PI / 2;
+    loaderPivot.add(pinMesh);
+    loaderPivot.add(box(0.24, 0.32, 2.4, 0xffc93c, s * 1.75, 0, 1.1)); // outer sleeve
+    const sl = new THREE.Mesh(sliderGeo, toon(0xd5d9df));
+    sl.position.set(s * 1.75, 0, 2.2);
+    sl.castShadow = true;
+    loaderPivot.add(sl);
+    sliders.push(sl);
+  }
+  const forks = new THREE.Group();
+  loaderPivot.add(forks);
+  for (const s of [1, -1]) {
+    forks.add(box(0.3, 0.5, 0.3, 0x55585f, s * 1.75, 0, 0));
+    forks.add(box(0.16, 0.18, 1.8, 0x2b2d33, s * 1.7, 0, 0.9)); // prong
+  }
+  const loader = { pivot: loaderPivot, sliders, forks, P: LOADER_P, sliderStart: 2.2 };
+
   const hopperLocal = new THREE.Vector3(0, 3.4, HOP_Z); // mouth of the open hopper
   const rearLocal = new THREE.Vector3(0, 2.5, -4.2); // rear door, for unloading
 
-  return { group, body, wheels, frontWheels, arms, beacon, beaconMat, steve, hopperLocal, rearLocal, fill, lampMat };
+  return { group, body, wheels, frontWheels, arms, loader, beacon, beaconMat, steve, hopperLocal, rearLocal, fill, lampMat };
 }
 
 // ---------------------------------------------------------------------------
@@ -1097,6 +1127,8 @@ export function makeDumpster(color = 0x3d7ea6) {
   g.add(box(1.55, 0.1, 1.9, shade(color, 0.7), 0.8, 1.74, 0));
   for (const s of [-1.3, 1.3]) for (const z of [-0.7, 0.7]) g.add(cyl(0.12, 0.12, 0.12, 0x2b2d33, s, 0.1, z, 8));
   g.add(sphere(0.35, 0x2b2b2b, -0.9, 1.75, 0.2, 8));
+  // Fork sleeves on both ends, for front-loader trucks
+  for (const s of [-1.68, 1.68]) g.add(box(0.2, 0.26, 1.95, 0x2b2d33, s, 0.95, 0));
   return g;
 }
 
@@ -1248,40 +1280,475 @@ export function makePigeon() {
   return { group: g, wings };
 }
 
-/** A goose. Geese do not move for trucks. Returns { group, neck, body }. */
+// ---------------------------------------------------------------------------
+// Citizens: chibi critters with big heads and shiny eyes
+// ---------------------------------------------------------------------------
+
+const CRITTER_SPECIES = {
+  kitten: { colors: [0xffa65c, 0x8a8f99, 0x3a3d45, 0xf4efe6, 0xd9a06b], word: ['MEOW!', 'MRRROW!', 'HISS!'] },
+  puppy: { colors: [0xd9a06b, 0x8d5b3a, 0xf4efe6, 0xc49a6c], word: ['ARF!', 'WOOF!', 'YIP!'] },
+  dalmatian: { colors: [0xfafaf6], word: ['ARF!', 'WOOF!'] },
+  bunny: { colors: [0xfafaf6, 0xc9a37f, 0xa8a8b0], word: ['EEP!', 'BOING!'] },
+  hedgehog: { colors: [0xe8cfa8], word: ['HUFF!', 'SNORT!'] },
+  squirrel: { colors: [0xd0783a, 0x9a6a4a], word: ['CHITTER!', 'NUTS!'] },
+};
+export const CRITTER_WORDS = Object.fromEntries(Object.entries(CRITTER_SPECIES).map(([k, v]) => [k, v.word]));
+
+function cuteEyes(head, r, spread, y, z, scale = 1) {
+  for (const s of [1, -1]) {
+    const eye = sphere(0.085 * scale, 0x1b1b22, spread * s, y, z, 12);
+    eye.scale.set(1, 1.25, 0.7);
+    head.add(eye);
+    head.add(sphere(0.032 * scale, 0xffffff, spread * s + 0.02 * s * scale, y + 0.04 * scale, z + 0.05 * scale, 6));
+    head.add(sphere(0.016 * scale, 0xffffff, spread * s - 0.02 * s * scale, y - 0.03 * scale, z + 0.055 * scale, 6));
+    const blush = sphere(0.06 * scale, 0xff9fb5, (spread + 0.09 * scale) * s, y - 0.1 * scale, z - 0.03, 8);
+    blush.scale.set(1.2, 0.6, 0.4);
+    head.add(blush);
+  }
+}
+
+/** A cute critter. Returns { group, body, head, tail, legs, species }. */
+export function makeCritter(species, rand) {
+  const spec = CRITTER_SPECIES[species];
+  const col = spec.colors[(rand() * spec.colors.length) | 0];
+  const g = new THREE.Group();
+  const body = new THREE.Group();
+  g.add(body);
+  const S = species === 'hedgehog' ? 0.8 : species === 'squirrel' ? 0.75 : 1;
+
+  // Round little body
+  const torso = sphere(0.3, col, 0, 0.36, -0.02, 14);
+  torso.scale.set(0.85, 0.8, 1.05);
+  body.add(torso);
+  const belly = sphere(0.2, species === 'kitten' && col === 0x3a3d45 ? 0xf4efe6 : shade(col, 1.12), 0, 0.33, 0.12, 10);
+  belly.scale.set(0.9, 0.9, 0.6);
+  if (species !== 'hedgehog') body.add(belly);
+
+  // Stubby legs (animated)
+  const legs = [];
+  for (const [x, z] of [[0.15, 0.15], [-0.15, 0.15], [0.15, -0.17], [-0.15, -0.17]]) {
+    const leg = new THREE.Group();
+    leg.position.set(x, 0.2, z);
+    leg.add(cyl(0.065, 0.07, 0.2, col, 0, -0.1, 0, 8));
+    leg.add(sphere(0.075, shade(col, 0.95), 0, -0.19, 0.02, 8));
+    body.add(leg);
+    legs.push(leg);
+  }
+
+  // Big head
+  const head = new THREE.Group();
+  head.position.set(0, 0.74, 0.12);
+  body.add(head);
+  head.add(sphere(0.34, col, 0, 0, 0, 16));
+  cuteEyes(head, 0.34, 0.13, 0.03, 0.28);
+  // nose + tiny mouth
+  head.add(sphere(0.035, species === 'puppy' || species === 'dalmatian' || species === 'hedgehog' ? 0x2b2b30 : 0xff7f9e, 0, -0.07, 0.335, 8));
+
+  let tail = new THREE.Group();
+  tail.position.set(0, 0.42, -0.3);
+  body.add(tail);
+
+  if (species === 'kitten') {
+    for (const s of [1, -1]) {
+      const ear = cone(0.15, 0.3, col, 0.2 * s, 0.3, -0.02, 4);
+      ear.rotation.set(-0.15, Math.PI / 4, -0.35 * s);
+      head.add(ear);
+      const inner = cone(0.08, 0.17, 0xff9fb5, 0.19 * s, 0.29, 0.05, 4);
+      inner.rotation.set(-0.15, Math.PI / 4, -0.35 * s);
+      head.add(inner);
+    }
+    if (col === 0xffa65c) for (const y of [0.18, 0.25]) head.add(box(0.12, 0.03, 0.05, 0xe07b2c, 0, y, 0.27)); // tabby stripes
+    const t1 = cyl(0.05, 0.06, 0.45, col, 0, 0.2, 0, 8);
+    t1.rotation.x = -0.4;
+    tail.add(t1);
+    tail.add(sphere(0.065, col, 0, 0.42, -0.1, 8));
+  } else if (species === 'puppy' || species === 'dalmatian') {
+    const muzzle = sphere(0.14, species === 'dalmatian' ? 0xfafaf6 : 0xf4efe6, 0, -0.08, 0.25, 10);
+    muzzle.scale.set(1.2, 0.8, 0.8);
+    head.add(muzzle);
+    head.children.find((m) => m.geometry?.parameters?.radius === 0.035)?.position.set(0, -0.05, 0.37);
+    const earCol = species === 'dalmatian' ? 0x2b2b30 : shade(col, 0.7);
+    for (const s of [1, -1]) {
+      const ear = sphere(0.14, earCol, 0.31 * s, 0.0, -0.02, 10);
+      ear.scale.set(0.5, 1.45, 0.85);
+      ear.rotation.z = 0.45 * s;
+      head.add(ear);
+    }
+    tail.add(cyl(0.04, 0.06, 0.3, col, 0, 0.14, 0, 6));
+    tail.rotation.x = -0.6;
+    if (species === 'dalmatian') {
+      for (const [x, y, z, r] of [[0.15, 0.45, -0.05, 0.07], [-0.12, 0.4, -0.2, 0.06], [0.05, 0.5, 0.1, 0.05], [-0.18, 0.3, 0.05, 0.05]]) body.add(sphere(r, 0x2b2b30, x, y, z, 6));
+      head.add(sphere(0.06, 0x2b2b30, 0.15, 0.2, 0.22, 6));
+      // fire-department collar
+      body.add(cyl(0.19, 0.19, 0.05, 0xe63946, 0, 0.55, 0.1, 12));
+    }
+  } else if (species === 'bunny') {
+    for (const s of [1, -1]) {
+      const ear = sphere(0.09, col, 0.12 * s, 0.42, -0.04, 10);
+      ear.scale.set(0.7, 2.6, 0.5);
+      ear.rotation.z = -0.12 * s;
+      head.add(ear);
+      const inner = sphere(0.05, 0xff9fb5, 0.12 * s, 0.42, 0.0, 8);
+      inner.scale.set(0.6, 2.4, 0.3);
+      inner.rotation.z = -0.12 * s;
+      head.add(inner);
+    }
+    tail.add(sphere(0.12, 0xffffff, 0, 0, -0.05, 10));
+  } else if (species === 'hedgehog') {
+    // spiky back
+    const spikeCol = 0x6b4a2f;
+    for (let i = 0; i < 22; i++) {
+      const a = (i / 22) * Math.PI * 2;
+      const row = i % 2;
+      const sp = cone(0.07, 0.24, spikeCol, Math.cos(a) * 0.22, 0.44 + row * 0.12, -0.05 + Math.sin(a) * 0.22 - 0.05, 4);
+      sp.rotation.set(-Math.sin(a) * 0.9 - 0.4, 0, -Math.cos(a) * 0.9);
+      body.add(sp);
+    }
+    const back = sphere(0.36, spikeCol, 0, 0.45, -0.12, 10);
+    back.scale.set(0.95, 0.85, 1.0);
+    body.add(back);
+    head.position.set(0, 0.48, 0.2);
+    head.scale.setScalar(0.75);
+  } else if (species === 'squirrel') {
+    for (const s of [1, -1]) head.add(cone(0.07, 0.16, col, 0.17 * s, 0.3, -0.02, 6));
+    // big bushy tail curling up behind
+    const t = [[0, 0.1, -0.15, 0.17], [0, 0.35, -0.3, 0.2], [0, 0.65, -0.28, 0.21], [0, 0.88, -0.12, 0.18]];
+    for (const [x, y, z, r] of t) tail.add(sphere(r, shade(col, 1.1), x, y, z, 10));
+    // acorn snack
+    body.add(sphere(0.07, 0x9a6a4a, 0, 0.5, 0.33, 8));
+    body.add(sphere(0.06, 0x5a3a20, 0, 0.56, 0.33, 8));
+  }
+  g.scale.setScalar(S * 1.1);
+  addOutline(g, 0.02);
+  return { group: g, body, head, tail, legs, species };
+}
+
+/** A cute (but deeply unbothered) goose. Returns { group, neck, body }. */
 export function makeGoose() {
   const g = new THREE.Group();
   const body = new THREE.Group();
   g.add(body);
-  const torso = sphere(0.5, 0xf4f4ef, 0, 0.75, 0, 12);
-  torso.scale.set(0.8, 0.75, 1.3);
+  const WHITE = 0xfbfbf6;
+  const ORANGE = 0xff9a2a;
+  const torso = sphere(0.45, WHITE, 0, 0.62, -0.05, 16);
+  torso.scale.set(0.95, 0.85, 1.15);
   body.add(torso);
-  const tail = cone(0.25, 0.4, 0xf4f4ef, 0, 0.9, -0.65, 6);
-  tail.rotation.x = -1.9;
+  const tail = cone(0.2, 0.3, WHITE, 0, 0.78, -0.55, 8);
+  tail.rotation.x = -2.0;
   body.add(tail);
   for (const s of [1, -1]) {
-    const wing = sphere(0.35, 0xdcdcd2, 0.33 * s, 0.82, -0.05, 8);
-    wing.scale.set(0.35, 0.6, 1.1);
+    const wing = sphere(0.3, 0xe9e9e0, 0.36 * s, 0.68, -0.08, 10);
+    wing.scale.set(0.35, 0.65, 1.1);
+    wing.rotation.x = 0.2;
     body.add(wing);
-    body.add(cyl(0.04, 0.04, 0.45, 0xff9f1a, 0.15 * s, 0.22, 0, 5));
-    body.add(box(0.18, 0.04, 0.25, 0xff9f1a, 0.15 * s, 0.02, 0.08));
+    // little orange legs and webbed feet
+    body.add(cyl(0.035, 0.035, 0.28, ORANGE, 0.14 * s, 0.15, 0, 6));
+    const foot = sphere(0.1, ORANGE, 0.14 * s, 0.02, 0.07, 8);
+    foot.scale.set(1, 0.3, 1.3);
+    body.add(foot);
   }
   const neck = new THREE.Group();
-  neck.position.set(0, 1.0, 0.45);
+  neck.position.set(0, 0.85, 0.3);
   body.add(neck);
-  const n = cyl(0.11, 0.14, 0.8, 0xf4f4ef, 0, 0.35, 0, 8);
-  neck.add(n);
-  neck.add(sphere(0.18, 0xf4f4ef, 0, 0.8, 0.06, 10));
-  const beak = cone(0.08, 0.3, 0xff9f1a, 0, 0.76, 0.3, 6);
-  beak.rotation.x = Math.PI / 2;
-  neck.add(beak);
+  neck.add(cyl(0.12, 0.15, 0.45, WHITE, 0, 0.2, 0, 10));
+  const head = new THREE.Group();
+  head.position.set(0, 0.55, 0.04);
+  neck.add(head);
+  head.add(sphere(0.25, WHITE, 0, 0, 0, 16));
+  // round beak with a nostril
+  const beak = sphere(0.11, ORANGE, 0, -0.04, 0.24, 10);
+  beak.scale.set(1.1, 0.65, 1.4);
+  head.add(beak);
+  head.add(sphere(0.02, 0xc96a10, 0.04, 0.0, 0.33, 4));
+  cuteEyes(head, 0.25, 0.11, 0.06, 0.19, 0.85);
+  // grumpy eyebrows: the attitude stays
   for (const s of [1, -1]) {
-    neck.add(sphere(0.035, 0x111111, 0.13 * s, 0.86, 0.14, 6));
-    // angry little brow
-    const brow = box(0.12, 0.03, 0.03, 0x111111, 0.1 * s, 0.93, 0.16);
-    brow.rotation.z = 0.5 * s;
-    neck.add(brow);
+    const brow = box(0.11, 0.025, 0.03, 0x1b1b22, 0.1 * s, 0.17, 0.2);
+    brow.rotation.z = 0.45 * s;
+    head.add(brow);
   }
+  // fluffy tuft
+  head.add(sphere(0.06, WHITE, 0, 0.25, -0.02, 6));
   addOutline(g, 0.02);
   return { group: g, neck, body };
+}
+
+// ---------------------------------------------------------------------------
+// Buildings for the special blocks
+// ---------------------------------------------------------------------------
+
+function signPlane(lines, w, h, opts) {
+  const tex = textTexture(lines, { w: 1024, h: Math.round((1024 * h) / w), ...opts });
+  return new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, transparent: !opts.bg }));
+}
+
+function windowRow(g, n, x0, dx, y, z, w = 1.4, h = 1.3) {
+  for (let i = 0; i < n; i++) {
+    g.add(box(w + 0.2, h + 0.2, 0.12, 0xffffff, x0 + i * dx, y, z));
+    g.add(box(w, h, 0.14, 0, x0 + i * dx, y, z + 0.01, nightMats.windows));
+  }
+}
+
+/** The Rusty Lid: the neighborhood bar. Faces +z. Footprint 16 x 10. */
+export function makeBar() {
+  const g = new THREE.Group();
+  const BRICK = 0xb5543c;
+  g.add(box(16, 5.2, 10, BRICK, 0, 2.6, 0));
+  for (let y = 0.6; y < 5; y += 0.6) g.add(box(16.04, 0.05, 10.04, shade(BRICK, 0.85), 0, y, 0)); // brick courses
+  g.add(box(16.6, 0.5, 10.6, 0x6b3a2c, 0, 5.4, 0)); // parapet cap
+  // Door, windows, striped awning
+  g.add(box(1.8, 2.8, 0.15, 0x3a2a20, 0, 1.4, 5.05));
+  g.add(sphere(0.09, 0xffd23f, 0.6, 1.4, 5.15, 6));
+  windowRow(g, 2, -5.2, 2.4, 2.0, 5.02, 1.8, 1.6);
+  windowRow(g, 2, 2.8, 2.4, 2.0, 5.02, 1.8, 1.6);
+  for (let i = 0; i < 8; i++) {
+    const stripe = box(2.0, 0.08, 1.6, i % 2 ? 0xfffbe8 : 0x2d936c, -7 + i * 2, 3.35, 5.75);
+    stripe.rotation.x = 0.35;
+    g.add(stripe);
+  }
+  // Neon sign on the roof
+  const neon = signPlane(['THE RUSTY LID'], 9, 1.6, { color: '#ffe066', stroke: '#ff4f9a', font: 'bold 150px "Trebuchet MS", sans-serif' });
+  neon.position.set(0, 6.8, 2);
+  g.add(neon);
+  g.add(box(9.4, 2.0, 0.2, 0x2b2d33, 0, 6.8, 1.88));
+  for (const s of [-4, 4]) g.add(box(0.15, 1.4, 0.15, 0x2b2d33, s, 5.9, 1.9));
+  // A giant tipped-over beer mug... of root beer, obviously
+  const mug = cyl(0.7, 0.7, 1.5, 0xc98b2c, 7, 6.4, -2, 12);
+  g.add(mug);
+  g.add(cyl(0.74, 0.74, 0.35, 0xfffbe8, 7, 7.25, -2, 12));
+  // String lights over the patio
+  for (let i = 0; i < 9; i++) g.add(sphere(0.12, 0, -7 + i * 1.75, 4.2 - Math.sin((i / 8) * Math.PI) * 0.4, 7.5, 6, nightMats.lamps));
+  for (const s of [-7.5, 7.5]) g.add(cyl(0.07, 0.07, 4.3, 0x2b2d33, s, 2.15, 7.5, 6));
+  return g;
+}
+
+/** Binsville Elementary. Faces +z. Footprint 22 x 9. */
+export function makeSchool() {
+  const g = new THREE.Group();
+  const WALL = 0xf2d17e;
+  g.add(box(22, 7.4, 9, WALL, 0, 3.7, 0));
+  g.add(box(22.4, 0.4, 9.4, 0xd9534f, 0, 7.6, 0));
+  windowRow(g, 6, -9, 3.6, 2.0, 4.52, 2.0, 1.6);
+  windowRow(g, 6, -9, 3.6, 5.3, 4.52, 2.0, 1.6);
+  // Entrance with steps and doors
+  g.add(box(5, 4.2, 1.2, 0xe8c36a, 0, 2.1, 5.0));
+  g.add(box(3, 2.6, 0.15, 0x3d7ea6, 0, 1.3, 5.62));
+  g.add(box(0.06, 2.6, 0.17, 0xffffff, 0, 1.3, 5.64));
+  g.add(box(6, 0.3, 1.5, 0xd9d4c7, 0, 0.15, 6.2));
+  const sign = signPlane(['BINSVILLE', 'ELEMENTARY'], 5, 1.4, { bg: '#2d936c', color: '#fffbe8', font: 'bold 150px "Trebuchet MS", sans-serif' });
+  sign.position.set(0, 3.5, 5.62);
+  g.add(sign);
+  // Bell tower with a clock
+  g.add(box(3, 3, 3, 0xe8c36a, 0, 9.3, 0));
+  g.add(box(1.8, 1.6, 0.1, 0x2b2d33, 0, 9.4, 1.52));
+  const roof = cone(2.5, 2.4, 0xd9534f, 0, 12.0, 0, 4);
+  roof.rotation.y = Math.PI / 4;
+  g.add(roof);
+  const clock = cyl(0.9, 0.9, 0.1, 0xfffbe8, 0, 9.3, 1.55, 20);
+  clock.rotation.x = Math.PI / 2;
+  g.add(clock);
+  g.add(box(0.08, 0.6, 0.05, 0x2b2d33, 0, 9.5, 1.62));
+  g.add(box(0.45, 0.08, 0.05, 0x2b2d33, 0.2, 9.3, 1.62));
+  return g;
+}
+
+export function makeFlagpole() {
+  const g = new THREE.Group();
+  g.add(cyl(0.08, 0.1, 9, 0xd5d9df, 0, 4.5, 0, 8));
+  g.add(sphere(0.18, 0xffd23f, 0, 9.1, 0, 8));
+  const flag = new THREE.Group();
+  flag.position.set(0, 8.2, 0);
+  const tex = textTexture(['🦝'], { w: 256, h: 160, bg: '#3d7ea6', color: '#fff', font: '110px sans-serif' });
+  const f = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.4), new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }));
+  f.position.x = 1.1;
+  flag.add(f);
+  g.add(flag);
+  g.userData.flag = flag;
+  return g;
+}
+
+export function makeSchoolBus() {
+  const g = new THREE.Group();
+  const Y = 0xffc21a;
+  g.add(box(2.6, 2.4, 8.5, Y, 0, 1.75, 0));
+  g.add(box(2.4, 1.2, 1.4, Y, 0, 1.15, 4.9));
+  g.add(box(2.62, 0.12, 8.52, 0x2b2d33, 0, 1.4, 0));
+  for (let i = 0; i < 6; i++) for (const s of [1.31, -1.31]) {
+    const w = box(0.04, 0.8, 1.0, 0, s, 2.35, -3.3 + i * 1.25, nightMats.windows);
+    g.add(w);
+  }
+  g.add(box(2.2, 0.9, 0.05, 0, 0, 2.4, 4.26, nightMats.windows));
+  g.add(signPlane(['SCHOOL BUS'], 2.2, 0.4, { bg: '#ffc21a', color: '#2b2d33', font: 'bold 110px sans-serif' }));
+  g.children[g.children.length - 1].position.set(0, 3.15, 4.27);
+  for (const z of [3.2, -2.8]) for (const s of [1.25, -1.25]) {
+    const w = cyl(0.55, 0.55, 0.4, 0x2a2a2e, s, 0.55, z, 14);
+    w.rotation.z = Math.PI / 2;
+    g.add(w);
+  }
+  for (const s of [0.8, -0.8]) g.add(cyl(0.18, 0.18, 0.1, 0, s, 1.2, 5.62, 10, glow(0xfff4c2, 0.8)));
+  g.children.slice(-2).forEach((m) => (m.rotation.x = Math.PI / 2));
+  return g;
+}
+
+export function makePlayground() {
+  const g = new THREE.Group();
+  // slide
+  g.add(box(1.6, 0.15, 1.6, 0xd9534f, 0, 2.4, 0));
+  for (const [x, z] of [[0.7, 0.7], [-0.7, 0.7], [0.7, -0.7], [-0.7, -0.7]]) g.add(cyl(0.07, 0.07, 2.4, 0x3d7ea6, x, 1.2, z, 6));
+  const slide = box(0.9, 0.1, 3.6, 0xffc21a, 0, 1.25, 2.3);
+  slide.rotation.x = 0.68;
+  g.add(slide);
+  for (let i = 0; i < 5; i++) g.add(box(0.8, 0.06, 0.12, 0x3d7ea6, 0, 0.4 + i * 0.45, -0.85));
+  // swings
+  const sx = 4.5;
+  for (const s of [-1.6, 1.6]) {
+    const leg = cyl(0.08, 0.08, 3.4, 0x2d936c, sx + s, 1.6, 0, 6);
+    leg.rotation.z = s > 0 ? -0.12 : 0.12;
+    g.add(leg);
+  }
+  g.add(cyl(0.08, 0.08, 3.4, 0x2d936c, sx, 3.25, 0, 6));
+  g.children[g.children.length - 1].rotation.z = Math.PI / 2;
+  for (const s of [-0.7, 0.7]) {
+    g.add(cyl(0.02, 0.02, 2.3, 0x9aa0a8, sx + s - 0.25, 2.1, 0, 4));
+    g.add(cyl(0.02, 0.02, 2.3, 0x9aa0a8, sx + s + 0.25, 2.1, 0, 4));
+    g.add(box(0.7, 0.08, 0.35, 0xff7a1a, sx + s, 0.95, 0));
+  }
+  // sandbox
+  g.add(box(3, 0.3, 3, 0xc98b4f, -4.5, 0.15, 0));
+  g.add(box(2.7, 0.32, 2.7, 0xf2dca2, -4.5, 0.16, 0));
+  return g;
+}
+
+/** Fire Station 9. Faces +z. Footprint 16 x 11, plus a hose tower. */
+export function makeFirehouse() {
+  const g = new THREE.Group();
+  const RED = 0xc8402e;
+  g.add(box(16, 7, 11, RED, 0, 3.5, 0));
+  g.add(box(16.4, 0.4, 11.4, 0xfffbe8, 0, 7.2, 0));
+  for (let y = 0.7; y < 7; y += 0.7) g.add(box(16.04, 0.05, 11.04, shade(RED, 0.85), 0, y, 0));
+  // Two big garage doors: left one open with the engine peeking out
+  for (const x of [-4, 4]) g.add(box(6.2, 5, 0.12, 0xfffbe8, x, 2.5, 5.52));
+  g.add(box(5.6, 4.6, 0.1, 0x2a2c31, -4, 2.3, 5.56));
+  const door = box(5.6, 4.6, 0.12, 0xd9d4c7, 4, 2.3, 5.58);
+  g.add(door);
+  for (let i = 1; i < 6; i++) g.add(box(5.6, 0.05, 0.14, 0xb9b2a4, 4, i * 0.78, 5.6));
+  windowRow(g, 3, -5.5, 5.5, 5.95, 5.52, 1.6, 0.9);
+  const sign = signPlane(['FIRE STATION 9'], 9, 1.0, { bg: '#fffbe8', color: '#c8402e', font: 'bold 130px "Trebuchet MS", sans-serif' });
+  sign.position.set(0, 6.6, 5.6);
+  g.add(sign);
+  // Hose-drying tower and siren
+  g.add(box(3, 12, 3, shade(RED, 0.9), 9.5, 6, -3.5));
+  g.add(box(3.4, 0.4, 3.4, 0xfffbe8, 9.5, 12.2, -3.5));
+  g.add(cone(2.2, 1.6, 0x2b2d33, 9.5, 13.2, -3.5, 4));
+  g.children[g.children.length - 1].rotation.y = Math.PI / 4;
+  g.add(cyl(0.45, 0.5, 0.6, 0xe0e3e8, -6, 7.7, -2, 12));
+  return g;
+}
+
+export function makeFireEngine() {
+  const g = new THREE.Group();
+  const RED = 0xe23b2e;
+  g.add(box(2.6, 1.8, 6, RED, 0, 1.6, 0));
+  g.add(box(2.6, 2.2, 1.8, RED, 0, 1.8, 2.9));
+  g.add(box(2.4, 1.0, 0.05, 0, 0, 2.4, 3.82, nightMats.windows));
+  g.add(box(2.7, 0.4, 0.3, 0xd5d9df, 0, 0.75, 3.9));
+  g.add(box(2.62, 0.2, 6.02, 0xfffbe8, 0, 1.5, 0));
+  g.add(box(0.6, 0.3, 0.6, 0, -0.6, 3.05, 2.9, glow(0xff3b3b, 1)));
+  g.add(box(0.6, 0.3, 0.6, 0, 0.6, 3.05, 2.9, glow(0x3b8bff, 1)));
+  // ladder on top
+  for (const s of [-0.5, 0.5]) g.add(box(0.1, 0.1, 5, 0xd5d9df, s, 2.7, -0.6));
+  for (let i = 0; i < 9; i++) g.add(box(1.0, 0.08, 0.08, 0xd5d9df, 0, 2.7, -3 + i * 0.6));
+  for (const z of [2.6, -1.8]) for (const s of [1.25, -1.25]) {
+    const w = cyl(0.55, 0.55, 0.4, 0x2a2a2e, s, 0.55, z, 14);
+    w.rotation.z = Math.PI / 2;
+    g.add(w);
+  }
+  return g;
+}
+
+export function makeShed() {
+  const g = new THREE.Group();
+  g.add(box(4, 2.8, 3, 0x8e5b3d, 0, 1.4, 0));
+  for (let x = -1.8; x <= 1.8; x += 0.45) g.add(box(0.05, 2.8, 3.04, 0x6b4430, x, 1.4, 0));
+  const r = box(4.6, 0.2, 3.6, 0x2d936c, 0, 3.0, 0);
+  r.rotation.x = 0.15;
+  g.add(r);
+  g.add(box(1.2, 2.0, 0.1, 0x5a3a28, 0, 1.0, 1.52));
+  g.add(signPlane(['COMMUNITY', 'GARDEN'], 3.4, 1.0, { bg: '#fffbe8', color: '#2d936c', font: 'bold 120px "Trebuchet MS", sans-serif' }));
+  g.children[g.children.length - 1].position.set(0, 2.4, 1.56);
+  return g;
+}
+
+export function makeScarecrow() {
+  const g = new THREE.Group();
+  g.add(cyl(0.08, 0.08, 3.0, 0x8e5b3d, 0, 1.5, 0, 6));
+  const arms = cyl(0.06, 0.06, 2.4, 0x8e5b3d, 0, 2.3, 0, 6);
+  arms.rotation.z = Math.PI / 2;
+  g.add(arms);
+  g.add(box(1.0, 1.0, 0.5, 0x3d7ea6, 0, 2.0, 0)); // shirt
+  for (const s of [-1, 1]) g.add(cone(0.12, 0.3, 0xf2d17e, s * 1.25, 2.3, 0, 6));
+  g.add(sphere(0.38, 0xe8cf9a, 0, 2.85, 0, 10));
+  for (const s of [-0.12, 0.12]) g.add(box(0.08, 0.08, 0.05, 0x2b2d33, s, 2.92, 0.36));
+  g.add(cyl(0.6, 0.6, 0.06, 0xc9a35a, 0, 3.15, 0, 14));
+  g.add(cone(0.32, 0.45, 0xc9a35a, 0, 3.4, 0, 10));
+  return g;
+}
+
+export function makeCabbage() {
+  const g = new THREE.Group();
+  g.add(sphere(0.32, 0x9fd86b, 0, 0.3, 0, 10));
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2;
+    const leaf = sphere(0.28, 0x6fbf4a, Math.cos(a) * 0.22, 0.22, Math.sin(a) * 0.22, 8);
+    leaf.scale.set(1, 0.45, 1);
+    leaf.rotation.set(Math.sin(a) * 0.6, 0, -Math.cos(a) * 0.6);
+    g.add(leaf);
+  }
+  return g;
+}
+
+export function makePumpkin() {
+  const g = new THREE.Group();
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    const lobe = sphere(0.3, 0xff8c2a, Math.cos(a) * 0.14, 0.3, Math.sin(a) * 0.14, 10);
+    lobe.scale.set(0.8, 0.85, 0.8);
+    g.add(lobe);
+  }
+  g.add(cyl(0.05, 0.07, 0.22, 0x5a7a2a, 0, 0.62, 0, 6));
+  return g;
+}
+
+export function makeSunflower() {
+  const g = new THREE.Group();
+  g.add(cyl(0.05, 0.07, 2.4, 0x4f9a3a, 0, 1.2, 0, 6));
+  for (const s of [-1, 1]) {
+    const leaf = sphere(0.22, 0x4f9a3a, s * 0.22, 1.0, 0, 6);
+    leaf.scale.set(1.2, 0.3, 0.6);
+    g.add(leaf);
+  }
+  const headG = new THREE.Group();
+  headG.position.set(0, 2.45, 0.05);
+  headG.rotation.x = -0.35;
+  const petals = cyl(0.55, 0.55, 0.06, 0xffd23f, 0, 0, 0, 14);
+  petals.rotation.x = Math.PI / 2;
+  headG.add(petals);
+  const disk = cyl(0.3, 0.3, 0.1, 0x6b4430, 0, 0, 0.03, 14);
+  disk.rotation.x = Math.PI / 2;
+  headG.add(disk);
+  g.add(headG);
+  return g;
+}
+
+export function makeCarrots() {
+  const g = new THREE.Group();
+  for (const x of [-0.25, 0.25]) {
+    g.add(cone(0.1, 0.18, 0xff8c2a, x, 0.05, 0, 8));
+    for (let i = 0; i < 3; i++) {
+      const top = cone(0.05, 0.4, 0x5cb84a, x + (i - 1) * 0.06, 0.3, 0, 4);
+      top.rotation.z = (i - 1) * 0.3;
+      g.add(top);
+    }
+  }
+  return g;
 }

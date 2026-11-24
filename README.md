@@ -16,11 +16,13 @@ Then open the URL Vite prints. To build a static copy, run `npm run build`; the 
 
 ## How to play
 
-You have one shift, from 6 AM to 6 PM, which takes three real minutes. Score as many points as you can.
+You have one four-minute shift (the countdown is top-left; the sun sets as it runs out). Score as many points as you can.
 
 - **Grab trash:** stop near a glowing trash can and the claw on that side grabs it. The truck
   has a claw on each side: stop between cans on both sides of the street for a **double grab**.
-  Grabbing cans back to back builds a **streak** bonus. **Golden cans** are worth a lot more.
+  Grabbing cans back to back builds a **streak** bonus.
+- **Dumpsters:** a few overflowing dumpsters (orange on the minimap) wait at the curb. Line up
+  head-on and the truck's front loader hoists them over the cab into the hopper for 6 bags at once.
 - **Dump it:** the truck holds 12 bags (you can see the pile in the open hopper). Each bag you
   unload arcs onto the trash mountain, which grows over the shift. Unload on the
   yellow pad at **The Dump** (orange dot on the minimap). Each bag is worth 10 points, and a
@@ -40,8 +42,11 @@ You have one shift, from 6 AM to 6 PM, which takes three real minutes. Score as 
   scatter when you roll up, and trees and bushes burst into leaves when you bump them.
 - **Geese:** they wander the streets and they do not move. Not for you, not for anyone. Hit one
   and the truck bounces off, spills cargo, and gets honked at. Honk at them and they honk back.
-- **Be nice (a little):** mailboxes, fire hydrants and cats still cost you points. Honk (**H**)
-  to make cats jump out of the way.
+- **Citizens:** kittens, puppies, bunnies, hedgehogs, squirrels and the firehouse dalmatian go
+  about their day and try to get out of Steve's way. Bounce one and it costs a few points.
+  Honk (**H**) to make them jump. Mailboxes and hydrants also cost points.
+- **Around town:** the Rusty Lid bar, Binsville Elementary, Fire Station 9, a community garden
+  (whose vegetables are very much in harm's way), parks, the plaza and The Dump.
 
 | Key | Action |
 | --- | --- |
