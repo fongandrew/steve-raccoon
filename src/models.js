@@ -277,27 +277,37 @@ export function makeTruck() {
     body.add(box(0.35, 0.08, 0.6, CHROME, sx * 1.1, 0.85, 1.35));
   }
 
-  // --- Cab: Steve leans out of the driver's window ---
+  // --- Cab: open doorway on the driver's side (+x), like a side-loader ---
   const cabZ = 2.45;
-  body.add(box(2.7, 1.0, 1.9, TRUCK_WHITE, 0, 1.65, cabZ)); // lower cab
-  body.add(box(2.74, 0.14, 1.94, TRUCK_GREEN, 0, 1.95, cabZ)); // green waistline stripe
-  body.add(box(2.56, 0.03, 1.76, 0x3a3d45, 0, 2.16, cabZ)); // dark interior floor / dash
-  body.add(box(2.3, 0.25, 0.35, 0x3a3d45, 0, 2.3, cabZ + 0.72)); // dashboard
-  // Door seams + handles
-  for (const sx of [1.356, -1.356]) {
-    body.add(box(0.01, 0.85, 0.04, 0xb9bcc2, sx, 1.62, cabZ - 0.55));
-    body.add(box(0.04, 0.06, 0.25, CHROME, sx * 1.01, 1.85, cabZ - 0.3));
-  }
-  // Pillars and back wall
-  for (const sx of [1.29, -1.29]) {
-    body.add(box(0.12, 0.98, 0.12, TRUCK_WHITE, sx, 2.64, cabZ + 0.89));
-    body.add(box(0.12, 0.98, 0.12, TRUCK_WHITE, sx, 2.64, cabZ - 0.89));
-  }
-  body.add(box(2.7, 0.98, 0.1, TRUCK_WHITE, 0, 2.64, cabZ - 0.92));
+  const INTERIOR = 0x3a3d45;
+  body.add(box(2.7, 0.12, 1.9, INTERIOR, 0, 1.21, cabZ)); // cab floor
+  body.add(box(1.45, 1.0, 1.9, TRUCK_WHITE, -0.625, 1.65, cabZ)); // passenger side + engine hump
+  body.add(box(1.45, 0.03, 1.76, INTERIOR, -0.625, 2.16, cabZ));
+  body.add(box(2.7, 1.0, 0.12, TRUCK_WHITE, 0, 1.65, cabZ + 0.89)); // front wall
+  body.add(box(2.7, 1.95, 0.1, TRUCK_WHITE, 0, 2.15, cabZ - 0.92)); // back wall
+  body.add(box(2.3, 0.25, 0.35, INTERIOR, 0, 2.3, cabZ + 0.72)); // dashboard
+  // Green waistline stripe on the front and passenger side
+  body.add(box(2.74, 0.14, 0.04, TRUCK_GREEN, 0, 1.95, cabZ + 0.96));
+  body.add(box(0.04, 0.14, 1.94, TRUCK_GREEN, -1.37, 1.95, cabZ));
+  // Passenger door seam + handle
+  body.add(box(0.01, 0.85, 0.04, 0xb9bcc2, -1.356, 1.62, cabZ - 0.55));
+  body.add(box(0.04, 0.06, 0.25, CHROME, -1.37, 1.85, cabZ - 0.3));
+  // Pillars: full height on the open driver's side
+  body.add(box(0.12, 0.98, 0.12, TRUCK_WHITE, -1.29, 2.64, cabZ + 0.89));
+  body.add(box(0.12, 0.98, 0.12, TRUCK_WHITE, -1.29, 2.64, cabZ - 0.89));
+  body.add(box(0.14, 1.95, 0.14, TRUCK_WHITE, 1.29, 2.13, cabZ + 0.89));
+  body.add(box(0.14, 1.95, 0.14, TRUCK_WHITE, 1.29, 2.13, cabZ - 0.89));
+  body.add(box(0.05, 1.95, 0.05, TRUCK_GREEN, 1.36, 2.13, cabZ + 0.84)); // doorway trim
+  body.add(box(0.05, 1.95, 0.05, TRUCK_GREEN, 1.36, 2.13, cabZ - 0.84));
+  // Grab handle and a step up into the doorway
+  body.add(cyl(0.04, 0.04, 0.9, CHROME, 1.38, 2.2, cabZ - 0.72, 6));
+  body.add(box(0.4, 0.08, 0.9, CHROME, 1.45, 0.9, cabZ));
+  body.add(box(0.06, 0.3, 0.06, CHROME, 1.38, 1.04, cabZ - 0.4));
+  body.add(box(0.06, 0.3, 0.06, CHROME, 1.38, 1.04, cabZ + 0.4));
   // Roof with a little visor over the windshield
   body.add(box(2.76, 0.16, 1.96, TRUCK_WHITE, 0, 3.17, cabZ));
   body.add(box(2.6, 0.08, 0.3, TRUCK_GREEN, 0, 3.08, cabZ + 1.05));
-  // Glass: windshield + passenger window. The driver's window is rolled down.
+  // Glass: windshield + passenger window (the driver's side is open)
   const glass = new THREE.MeshToonMaterial({ color: 0xbfeaff, gradientMap: gradient, transparent: true, opacity: 0.3, depthWrite: false });
   const ws = new THREE.Mesh(new THREE.PlaneGeometry(2.46, 0.92), glass);
   ws.position.set(0, 2.62, cabZ + 0.9);
@@ -306,15 +316,16 @@ export function makeTruck() {
   sideGlass.position.set(-1.3, 2.62, cabZ);
   sideGlass.rotation.y = -Math.PI / 2;
   body.add(sideGlass);
-  body.add(box(0.14, 0.08, 1.7, 0xd5d9df, 1.33, 2.18, cabZ)); // driver's window sill
   // Mirrors on the front fenders, so they don't block Steve's view (or ours)
   for (const sx of [1, -1]) {
     body.add(cyl(0.03, 0.03, 0.5, DARK, sx * 1.25, 2.1, 3.55, 6));
     body.add(box(0.26, 0.3, 0.08, DARK, sx * 1.25, 2.4, 3.55));
     body.add(box(0.2, 0.24, 0.02, 0, sx * 1.25, 2.4, 3.5, toon(0xcfefff, { emissive: 0x8fbfd8, emissiveIntensity: 0.3 })));
   }
-  // Seat behind Steve
-  body.add(box(1.0, 1.0, 0.25, 0x8e5b3d, 0.75, 2.3, cabZ - 0.75));
+  // Driver's seat
+  body.add(box(0.9, 0.3, 0.8, 0x8e5b3d, 0.75, 1.42, cabZ - 0.3));
+  body.add(box(0.9, 1.05, 0.22, 0x8e5b3d, 0.75, 2.05, cabZ - 0.75));
+  body.add(box(0.12, 0.3, 0.12, INTERIOR, 0.75, 1.42, cabZ + 0.55)); // pedals
 
   // Hood, grille, headlights
   body.add(box(2.5, 0.75, 0.7, TRUCK_WHITE, 0, 1.5, 3.55));
@@ -488,15 +499,27 @@ export function makeTruck() {
     }
   }
 
-  // Steve sits in the driver's seat (left, +x), leaning on the open window
-  // with his head peeking out and his elbow on the sill.
+  // Steve sits in the driver's seat by the open doorway, feet on the pedals,
+  // leaning a little toward the door to enjoy the breeze.
   const steve = makeRaccoon();
-  steve.group.position.set(0.8, 1.53, cabZ - 0.1);
-  steve.group.rotation.z = -0.1;
+  steve.group.position.set(0.75, 1.52, cabZ - 0.2);
   steve.group.scale.setScalar(0.95);
-  steve.group.userData.baseY = 1.53;
-  steve.head.position.set(0.55, 1.18, 0.08);
-  steve.head.userData.baseTilt = 0.08;
+  steve.group.userData.baseY = 1.52;
+  steve.head.position.set(0.22, 1.12, 0.04);
+  steve.head.userData.baseTilt = -0.08;
+  const legs = new THREE.Group();
+  for (const side of [1, -1]) {
+    const thigh = cyl(0.13, 0.12, 0.5, 0x8b9096, 0.2 * side, 0.12, 0.3, 10);
+    thigh.rotation.x = Math.PI / 2;
+    legs.add(thigh);
+    legs.add(cyl(0.1, 0.1, 0.35, 0x8b9096, 0.2 * side, -0.05, 0.55, 10));
+    const foot = sphere(0.13, 0x3a3d42, 0.2 * side, -0.24, 0.62, 10);
+    foot.scale.set(1, 0.7, 1.4);
+    legs.add(foot);
+  }
+  addOutline(legs);
+  steve.group.add(legs);
+  steve.tail[0].parent.visible = false; // tucked away behind the seat
   body.add(steve.group);
 
   // Steering wheel with column
