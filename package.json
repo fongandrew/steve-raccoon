@@ -1,29 +1,47 @@
 {
-  "name": "steve-raccoon",
-  "version": "1.0.0",
-  "description": "It's a lovely day and you're a raccoon driving a trash truck.",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/fongandrew/steve-raccoon.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/fongandrew/steve-raccoon/issues"
-  },
-  "homepage": "https://github.com/fongandrew/steve-raccoon#readme",
-  "dependencies": {
-    "three": "^0.187.0"
-  },
-  "devDependencies": {
-    "vite": "^8.3.8"
-  },
-  "type": "module",
-  "private": true
+	"name": "steve-raccoon",
+	"version": "1.0.0",
+	"private": true,
+	"description": "Steve Raccoon — it's a lovely day and you're a raccoon driving a trash truck",
+	"type": "module",
+	"scripts": {
+		"postinstall": "node scripts/vendor.js",
+		"dev": "serve public -l 3000",
+		"eslint": "eslint --report-unused-disable-directives --max-warnings 0",
+		"lint": "npm run eslint -- \"public/**/*.{js,html}\" \"tests/**/*.js\" \"scripts/**/*.js\" \"*.js\"",
+		"lint:fix": "npm run lint -- --fix",
+		"format": "prettier --write \"public/**/*.css\" \"*.{js,json}\" && npm run lint:fix",
+		"typecheck": "tsc --noEmit -p jsconfig.json",
+		"vendor": "node scripts/vendor.js",
+		"vendor:check": "node scripts/vendor.js --check",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"test:e2e": "playwright test --trace off",
+		"check": "npm run vendor:check && npm run lint && npm run typecheck && npm run test && npm run test:e2e",
+		"build": "node scripts/build.js",
+		"deploy": "npm run build && npx --yes netlify-cli@27 deploy --prod --dir=dist --site=3e3fd768-c76d-4518-a20d-bbe3e8cbe9f6",
+		"deploy:draft": "npm run build && npx --yes netlify-cli@27 deploy --dir=dist --site=3e3fd768-c76d-4518-a20d-bbe3e8cbe9f6"
+	},
+	"devDependencies": {
+		"@eslint/js": "^9.39.5",
+		"@playwright/test": "^1.63.0",
+		"@types/node": "^26.6.6",
+		"@types/three": "^0.187.0",
+		"esbuild": "^0.28.2",
+		"eslint": "^9.39.5",
+		"eslint-config-prettier": "^9.1.2",
+		"eslint-plugin-html": "^8.2.1",
+		"eslint-plugin-import": "^2.32.0",
+		"eslint-plugin-prettier": "^5.5.7",
+		"eslint-plugin-simple-import-sort": "^14.0.0",
+		"eslint-plugin-unused-imports": "^4.4.1",
+		"globals": "^15.15.0",
+		"html-minifier-terser": "^7.2.0",
+		"jsdom": "^26.1.0",
+		"prettier": "^3.10.1",
+		"serve": "^14.2.8",
+		"three": "0.187.0",
+		"typescript": "^5.9.3",
+		"vitest": "^5.1.1"
+	}
 }

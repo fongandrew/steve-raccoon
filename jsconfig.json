@@ -1,0 +1,26 @@
+{
+	"compilerOptions": {
+		"target": "ES2022",
+		"module": "ES2022",
+		"moduleResolution": "bundler",
+		"lib": ["ES2022", "DOM", "DOM.Iterable"],
+		"allowJs": true,
+		"checkJs": true,
+		"noEmit": true,
+		"skipLibCheck": true,
+		"maxNodeModuleJsDepth": 0,
+		"types": [],
+
+		"strict": true,
+		"allowUnreachableCode": false,
+		"exactOptionalPropertyTypes": true,
+		"forceConsistentCasingInFileNames": true,
+		"noFallthroughCasesInSwitch": true,
+		"noImplicitOverride": true,
+		"noUncheckedIndexedAccess": true,
+		"noUnusedLocals": true,
+		"noUnusedParameters": true
+	},
+	"include": ["public/**/*.js", "public/vendor/**/*.d.ts", "tests/**/*.js"],
+	"exclude": ["node_modules", "public/sw.js", "public/vendor/**/*.js", "tests/e2e/**"]
+}
