@@ -614,19 +614,19 @@ function canFor(h) {
 }
 
 // ---------------------------------------------------------------------------
-// Grabber arm: 2-link IK in a vertical plane that yaws toward the can.
-// Arm-plane coords: u = outward from the truck's right side, v = up.
+// Grabber arm: a side-loader with a telescoping boom (ext), a lever that
+// swings from hanging straight down (lift = 0) up around the outside and over
+// the hopper (lift = LIFT_MAX), and a wrist that sets the can's tilt (tilt = 0
+// keeps it upright, DUMP_TILT tips it into the hopper).
 // ---------------------------------------------------------------------------
 const ARM = truck.arm;
-const ARM_REACH = ARM.L1 + ARM.L2 - 0.05;
-const GRIP_H = 0.7; // grip height above the can's base
-const REST = { u: 0.5, v: 0.25, r: 0, yaw: 0 };
-const LIFT = { u: 0.55, v: 2.75, r: 0, yaw: 0 };
-const DUMP = { u: -0.55, v: 3.15, r: -2.45, yaw: 0 };
+const LIFT_MAX = (210 * Math.PI) / 180;
+const DUMP_TILT = (-150 * Math.PI) / 180;
+const REST = { ext: 0, yaw: 0, lift: 0, tilt: 0 };
 const armPose = { ...REST, close: 0 };
 const armTmp = new THREE.Vector3();
 
-/** Where the gripper must be to hold a can whose base is at world point p. */
+/** Boom extension + yaw needed to hold a can whose base is at world point p. */
 function canToArm(p) {
   ARM.base.worldToLocal(armTmp.copy(p));
   // undo the base's own yaw so we get the yaw needed to face the can
@@ -635,44 +635,30 @@ function canToArm(p) {
   const x = armTmp.x * c + armTmp.z * sn;
   const z = -armTmp.x * sn + armTmp.z * c;
   const horiz = Math.hypot(x, z);
-  return {
-    u: horiz - ARM.GRIP,
-    v: armTmp.y + GRIP_H,
-    yaw: Math.atan2(z, -x),
-    reach: Math.hypot(horiz - ARM.GRIP, armTmp.y + GRIP_H),
-    side: -x, // > 0 when the can is on the arm side of the truck
-  };
+  return { ext: horiz - ARM.GRIP, yaw: Math.atan2(z, -x), side: -x };
 }
 
 function applyArm(pose) {
-  const { L1, L2 } = ARM;
-  let u = pose.u;
-  let v = pose.v;
-  let d = Math.hypot(u, v);
-  const dMin = Math.abs(L1 - L2) + 0.05;
-  const dMax = L1 + L2 - 0.01;
-  if (d < dMin || d > dMax) {
-    const k = Math.min(dMax, Math.max(dMin, d)) / (d || 1);
-    u *= k;
-    v *= k;
-    d = Math.hypot(u, v);
-  }
-  // elbow-up solution
-  const phi1 = Math.atan2(v, u) + Math.acos(Math.min(1, (L1 * L1 + d * d - L2 * L2) / (2 * L1 * d)));
-  const ex = L1 * Math.cos(phi1);
-  const ey = L1 * Math.sin(phi1);
-  const phi2 = Math.atan2(v - ey, u - ex);
+  const ext = Math.max(0, Math.min(ARM.MAX_EXT, pose.ext));
   ARM.base.rotation.y = pose.yaw;
-  ARM.shoulder.rotation.z = -phi1;
-  ARM.elbow.rotation.z = -(phi2 - phi1);
-  ARM.gripper.rotation.z = pose.r + phi2;
+  ARM.boom.scale.x = Math.max(0.01, ext);
+  ARM.slide.position.x = -ext;
+  ARM.lever.rotation.z = -pose.lift;
+  ARM.wrist.rotation.z = pose.tilt + pose.lift; // tilt is relative to the truck, not the lever
   for (const f of ARM.fingers) f.rotation.y = f.userData.side * (0.55 - pose.close * 0.62);
 }
 
 const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
 const lerpPose = (a, b, k) => ({
-  u: a.u + (b.u - a.u) * k, v: a.v + (b.v - a.v) * k, r: a.r + (b.r - a.r) * k, yaw: a.yaw + (b.yaw - a.yaw) * k,
+  ext: a.ext + (b.ext - a.ext) * k, yaw: a.yaw + (b.yaw - a.yaw) * k,
+  lift: a.lift + (b.lift - a.lift) * k, tilt: a.tilt + (b.tilt - a.tilt) * k,
 });
+/** Lift pose for 0..1 along the swing; the can stays upright until it clears the rim. */
+const swing = (k) => {
+  const lift = LIFT_MAX * k;
+  const tip = Math.max(0, Math.min(1, (k - 0.6) / 0.4));
+  return { ext: 0, yaw: 0, lift, tilt: DUMP_TILT * ease(tip) };
+};
 
 function startGrab(h) {
   h.state = 'grabbing';
@@ -684,7 +670,7 @@ function startGrab(h) {
 }
 
 // Timeline (seconds). The truck holds still until the can is back down.
-const G = { reach: 0.45, grip: 0.12, lift: 0.4, over: 0.3, dump: 0.5, back: 0.3, down: 0.4, release: 0.12, retract: 0.35 };
+const G = { reach: 0.45, grip: 0.12, pull: 0.3, lift: 0.5, dump: 0.45, lower: 0.45, push: 0.3, release: 0.12, retract: 0.3 };
 const GT = {};
 {
   let t = 0;
@@ -700,7 +686,7 @@ function updateGrab(dt) {
   const g = state.grab;
   truck.body.updateMatrixWorld(true);
   if (!g) {
-    const k = 1 - Math.exp(-8 * dt);
+    const k = 1 - Math.exp(-10 * dt);
     Object.assign(armPose, lerpPose(armPose, REST, k));
     armPose.close += (0 - armPose.close) * k;
     applyArm(armPose);
@@ -709,14 +695,12 @@ function updateGrab(dt) {
   g.t += dt;
   const t = g.t;
   const can = canFor(g.h);
-  const hover = (p) => ({ ...p, v: p.v + 0.55 });
-  const grabPose = { ...canToArm(g.home), r: 0 };
+  const grabPose = { ...canToArm(g.home), lift: 0, tilt: 0 };
+  const carry = { ...REST };
   let pose;
   let close = 0;
   if (t < GT.reach[1]) {
-    const k = ease(phase(t, 'reach'));
-    // Out to just above the can, then drop onto it
-    pose = k < 0.75 ? lerpPose(REST, hover(grabPose), ease(k / 0.75)) : lerpPose(hover(grabPose), grabPose, ease((k - 0.75) / 0.25));
+    pose = lerpPose(REST, grabPose, ease(phase(t, 'reach')));
   } else if (t < GT.grip[1]) {
     pose = grabPose;
     close = ease(phase(t, 'grip'));
@@ -726,12 +710,13 @@ function updateGrab(dt) {
       ARM.gripper.attach(can.group);
     }
     close = 1;
-    if (t < GT.lift[1]) pose = lerpPose(grabPose, LIFT, ease(phase(t, 'lift')));
-    else if (t < GT.over[1]) pose = lerpPose(LIFT, DUMP, ease(phase(t, 'over')));
+    if (t < GT.pull[1]) pose = lerpPose(grabPose, carry, ease(phase(t, 'pull')));
+    else if (t < GT.lift[1]) pose = swing(ease(phase(t, 'lift')));
     else {
       // Shake it out
       const k = phase(t, 'dump');
-      pose = { ...DUMP, r: DUMP.r + Math.sin(k * Math.PI * 6) * 0.12 * (1 - k) };
+      pose = swing(1);
+      pose.tilt += Math.sin(k * Math.PI * 6) * 0.12 * (1 - k);
       can.lid.rotation.x = -1.9 * Math.min(1, k * 4);
       if (Math.random() < 0.7) {
         const mouth = can.group.localToWorld(armTmp.set(0, 1.3, 0));
@@ -745,11 +730,12 @@ function updateGrab(dt) {
         collectBags(g.h);
       }
     }
-  } else if (t < GT.down[1]) {
+  } else if (t < GT.push[1]) {
     close = 1;
-    if (t < GT.back[1]) pose = lerpPose(DUMP, LIFT, ease(phase(t, 'back')));
-    else pose = lerpPose(LIFT, grabPose, ease(phase(t, 'down')));
-    can.lid.rotation.x = -1.9 + 1.3 * phase(t, 'back');
+    if (t < GT.lower[1]) {
+      pose = swing(1 - ease(phase(t, 'lower')));
+      can.lid.rotation.x = -1.9 + 1.3 * phase(t, 'lower');
+    } else pose = lerpPose(carry, grabPose, ease(phase(t, 'push')));
   } else if (t < GT.release[1]) {
     pose = grabPose;
     close = 1 - ease(phase(t, 'release'));
@@ -762,8 +748,6 @@ function updateGrab(dt) {
     }
   } else if (t < GT.retract[1]) {
     pose = lerpPose(grabPose, REST, ease(phase(t, 'retract')));
-    // lift straight up off the can first
-    pose.v += Math.sin(phase(t, 'retract') * Math.PI) * 0.4;
   } else {
     g.h.state = 'done';
     g.h.hideT = 4;
@@ -1282,28 +1266,28 @@ function animateTruck(dt, time) {
   let headY = 0;
   let headX = 0;
   let headZ = 0;
-  // Body lean: a little out the doorway when cruising, more into left turns,
-  // inward on right turns, and well out (looking back) when reversing.
+  // Body lean: a little out the doorway when cruising, more into right turns (toward the door),
+  // inward on left turns, and well out (looking back) when reversing.
   const reversing = T.fwd < -0.5;
   const cruising = Math.abs(T.fwd) > 0.5;
   let leanTarget;
   if (reversing) leanTarget = 0.46;
-  else leanTarget = Math.max(-0.18, Math.min(0.4, (cruising ? 0.12 : 0.04) + T.steer * 0.5));
+  else leanTarget = Math.max(-0.18, Math.min(0.4, (cruising ? 0.12 : 0.04) - T.steer * 0.5));
   steveLean += (leanTarget - steveLean) * Math.min(1, dt * 5);
-  steve.group.rotation.z = -steveLean;
-  steve.group.position.x = steve.group.userData.baseX + Math.max(0, steveLean) * 0.6;
+  steve.group.rotation.z = steveLean; // doorway is on the right (-x)
+  steve.group.position.x = steve.group.userData.baseX - Math.max(0, steveLean) * 0.6;
   if (state.chompT > 0) {
     headX = Math.abs(Math.sin(state.chompT * 18)) * 0.35;
     headY = Math.sin(state.chompT * 9) * 0.1;
   } else if (reversing) {
     // Look back over his shoulder, out the doorway
-    headY = 2.2;
+    headY = -2.2;
     headX = -0.1;
   } else if (state.hangry) {
     headZ = Math.sin(time * 25) * 0.12;
     headY = -T.steer * 0.8;
   } else {
-    headY = 0.15 + T.steer * 0.7 + Math.sin(time * 0.7) * 0.1;
+    headY = -0.15 + T.steer * 0.7 + Math.sin(time * 0.7) * 0.1;
     headX = -0.05 + (T.grounded ? 0 : -0.3);
   }
   head.rotation.x += (headX - head.rotation.x) * Math.min(1, dt * 12);
@@ -1313,9 +1297,11 @@ function animateTruck(dt, time) {
   steve.group.position.y = steve.group.userData.baseY + cele + (T.grounded ? 0 : 0.1);
   // Both paws on the wheel; the outer one waves out the doorway when celebrating
   const waving = state.celebrateT > 0;
-  if (reversing && !waving) steve.arms[0].rotation.set(-2.0, 0, 0.9); // grabs the door frame
-  else steve.arms[0].rotation.set(waving ? -2.6 : -1.1, 0, 0.2 + T.steer * 0.6 + (waving ? 0.6 + Math.sin(state.celebrateT * 18) * 0.3 : 0));
-  steve.arms[1].rotation.set(-1.1, 0, -0.2 + T.steer * 0.6);
+  // arms[1] is his doorway-side (right) arm: it grabs the frame when reversing
+  // and waves after a dump; arms[0] stays on the wheel
+  steve.arms[0].rotation.set(-1.1, 0, 0.2 + T.steer * 0.6);
+  if (reversing && !waving) steve.arms[1].rotation.set(-2.0, 0, -0.9);
+  else steve.arms[1].rotation.set(waving ? -2.6 : -1.1, 0, -0.2 + T.steer * 0.6 - (waving ? 0.6 + Math.sin(state.celebrateT * 18) * 0.3 : 0));
   // Tail wags, faster at speed
   const sp = Math.abs(T.fwd);
   steve.tail.forEach((seg, i) => {
@@ -1400,7 +1386,7 @@ function updateGameplay(dt) {
       if (!state.grab && T.grounded && Math.abs(T.fwd) < 5) {
         const d = Math.hypot(h.canX - T.pos.x, h.canZ - T.pos.z);
         const a = d < 8 ? canToArm(canFor(h).group.position) : null;
-        const reachable = a && a.side > 0.3 && a.reach < ARM_REACH && Math.abs(a.yaw) < 1.1;
+        const reachable = a && a.side > 0.3 && a.ext > 0.2 && a.ext < ARM.MAX_EXT && Math.abs(a.yaw) < 1.1;
         if (a && !reachable && d < 6 && !h.sideHinted) {
           h.sideHinted = true;
           popup('Claw is on the right!', pos, 'fun', 3);
