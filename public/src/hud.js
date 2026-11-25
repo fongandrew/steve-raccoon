@@ -27,7 +27,7 @@ export const hud = {
 	status: $('status'),
 	toast: $('toast'),
 	popups: $('popups'),
-	pedal: $('pedal'),
+	brake: $('btnBrake'),
 };
 /**
  * A floating label that rises from a point in the world.
@@ -148,6 +148,6 @@ export function updateHud() {
 		st.push(`🔥 streak x${state.streak}`);
 	if (state.load >= CAPACITY) st.push('🚛 FULL → Dump!');
 	hud.status.textContent = st.join(' · ');
-	// Touch: the pedal lights up through a drift, in the colour of the boost it has earned
-	hud.pedal.dataset.drift = state.touchDrift ? String(boostLevel(state.driftCharge)) : '';
+	// Touch: the brake lights up through a drift, in the colour of the boost it has earned
+	hud.brake.dataset.drift = state.touchDrift ? String(boostLevel(state.driftCharge)) : '';
 }

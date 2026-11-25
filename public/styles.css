@@ -315,12 +315,13 @@ body.touch #hint {
 	display: none;
 }
 
+/* The two halves of the screen. A quick tap on either, off the buttons, honks. */
 #steerZone,
 #pedalZone {
 	position: fixed;
+	top: 0;
 	bottom: 0;
 	width: 50vw;
-	height: 74vh;
 	touch-action: none;
 }
 
@@ -332,135 +333,107 @@ body.touch #hint {
 	right: 0;
 }
 
-/* Both controls rest, faint, in their corners and jump to the thumb on touch */
-#stick,
-#pedal {
+/* Steering: a wheel that appears where the left thumb lands. Its knob rides
+   round the rim as the thumb slides sideways. */
+#wheel {
 	position: fixed;
-	bottom: 26px;
+	width: 112px;
+	height: 112px;
+	margin: -56px 0 0 -56px;
+	border-radius: 50%;
 	border: 3px solid rgba(43, 45, 51, 0.6);
-	background: rgba(255, 252, 240, 0.3);
+	background: rgba(255, 252, 240, 0.28);
 	pointer-events: none;
-	opacity: 0.45;
+	display: none;
 }
 
-#stick.on,
-#pedal.on {
-	bottom: auto;
-	opacity: 1;
+#wheel.on {
+	display: block;
 }
 
-/* Steering: a short rail the knob slides along */
-#stick {
-	left: calc(96px + env(safe-area-inset-left));
-	width: 156px;
-	height: 60px;
-	margin: 0 0 0 -78px;
-	border-radius: 30px;
-}
-
-#stick.on {
-	margin-top: -30px;
-}
-
-#stick::before,
-#stick::after {
-	position: absolute;
-	top: 50%;
-	transform: translateY(-50%);
-	font-size: 16px;
-	font-weight: 900;
-	color: rgba(43, 45, 51, 0.7);
-}
-
-#stick::before {
-	content: '◀';
-	left: 9px;
-}
-
-#stick::after {
-	content: '▶';
-	right: 9px;
-}
-
-#knob,
-#pedalKnob {
+#wheel::before {
+	/* centre mark: straight ahead */
+	content: '';
 	position: absolute;
 	left: 50%;
-	width: 50px;
-	height: 50px;
-	margin-left: -25px;
-	border-radius: 50%;
-	background: rgba(255, 252, 240, 0.9);
-	border: 3px solid #2b2d33;
-	z-index: 1;
+	top: -9px;
+	width: 4px;
+	height: 12px;
+	margin-left: -2px;
+	border-radius: 2px;
+	background: rgba(43, 45, 51, 0.7);
 }
 
-#knob {
-	top: 50%;
-	margin-top: -25px;
-}
-
-/* Pedal: up is go, down is brake (and, through a turn, drift) */
-#pedal {
-	right: calc(30px + env(safe-area-inset-right));
-	width: 66px;
-	height: 112px;
-	border-radius: 33px;
-}
-
-#pedal.on {
-	right: auto;
-	margin: -36px 0 0 -33px;
-}
-
-#pedalKnob {
-	top: 8px;
-	background: #7bd67a;
-	transition: transform 0.08s;
-}
-
-#pedal.brake #pedalKnob {
-	background: #ff8a7a;
-}
-
-#pedal span {
+#wheelKnob {
 	position: absolute;
-	left: 0;
-	right: 0;
-	text-align: center;
-	font-size: 9px;
+	inset: 0;
+	transition: transform 0.04s linear;
+}
+
+#wheelKnob::before {
+	content: '';
+	position: absolute;
+	left: 50%;
+	top: 4px;
+	width: 38px;
+	height: 38px;
+	margin-left: -19px;
+	border-radius: 50%;
+	background: rgba(255, 252, 240, 0.92);
+	border: 3px solid #2b2d33;
+}
+
+/* Pedals: drawn here, pressed through #pedalZone (see input.js) */
+.pedal {
+	position: fixed;
+	display: grid;
+	place-items: center;
+	border-radius: 50%;
+	border: 3px solid #2b2d33;
+	box-shadow: 0 4px 0 #2b2d33;
 	font-weight: 900;
-	letter-spacing: 0.04em;
-	color: rgba(43, 45, 51, 0.75);
+	pointer-events: none;
 }
 
-#pedal .go {
-	top: -15px;
+.pedal.on {
+	transform: translateY(3px);
+	box-shadow: 0 1px 0 #2b2d33;
+	filter: brightness(1.12);
 }
 
-#pedal .stop {
-	bottom: -15px;
+#btnGas {
+	right: calc(18px + env(safe-area-inset-right));
+	bottom: 20px;
+	width: 96px;
+	height: 96px;
+	font-size: 18px;
+	background: rgba(123, 214, 122, 0.9);
 }
 
-/* Drifting: the knob takes the colour of the boost being charged */
-#pedal[data-drift='0'] #pedalKnob {
+#btnBrake {
+	right: calc(128px + env(safe-area-inset-right));
+	bottom: 20px;
+	width: 74px;
+	height: 74px;
+	font-size: 13px;
+	background: rgba(255, 138, 122, 0.9);
+}
+
+/* Drifting: the brake takes the colour of the boost being charged */
+#btnBrake[data-drift='0'] {
 	background: #fff;
 }
 
-#pedal[data-drift='1'] #pedalKnob {
+#btnBrake[data-drift='1'] {
 	background: #6ec6ff;
 }
 
-#pedal[data-drift='2'] #pedalKnob {
+#btnBrake[data-drift='2'] {
 	background: #ffa31a;
 }
 
-#pedal[data-drift='3'] #pedalKnob {
+#btnBrake[data-drift='3'] {
 	background: #ff6bd5;
-}
-
-#pedal[data-drift]:not([data-drift='']) .stop {
-	color: #2b2d33;
 }
 
 .tbtn {
@@ -478,15 +451,6 @@ body.touch #hint {
 	transform: translateY(3px);
 	box-shadow: 0 1px 0 #2b2d33;
 	background: #ffd23f;
-}
-
-/* Under the minimap, out of the pedal thumb's way */
-#btnHonk {
-	right: calc(8px + env(safe-area-inset-right));
-	top: 126px;
-	width: 50px;
-	height: 50px;
-	font-size: 22px;
 }
 
 #btnPause {

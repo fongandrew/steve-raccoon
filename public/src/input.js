@@ -26,10 +26,11 @@ const KEYMAP = {
 	KeyM: 'mute',
 	Enter: 'enter',
 };
-// --- Touch: the left thumb steers, the right thumb works the pedal (hold to
-// go, pull down to brake). There is no drift button: braking through a turn at
-// speed is the drift (see truck.js). 📯 honks, tapping Steve's portrait is a
-// snack, and the pause button has everything else.
+// --- Touch: the left thumb steers (a wheel appears where it lands; slide
+// sideways to turn), the right thumb has a GAS and a BRAKE button. There is no
+// drift button: braking through a turn at speed is the drift (see truck.js).
+// A quick tap anywhere that isn't a button honks, tapping Steve's portrait is
+// a snack, and the pause button has everything else.
 export const touch = {
 	/** -1 (full left) .. 1 (full right) */
 	steer: 0,
@@ -38,11 +39,12 @@ export const touch = {
 };
 
 /** Full steering lock is this far from where the thumb landed (px). */
-const STEER_R = 50;
-/** Pull the pedal thumb down this far (px) to brake... */
-const BRAKE_PULL = 24;
-/** ...and bring it back up this far to get back on the gas. */
-const GAS_PUSH = 16;
+const STEER_R = 46;
+/** A touch shorter and stiller than this is a tap: honk. */
+const TAP_MS = 220;
+const TAP_PX = 10;
+/** The pedals count a thumb this far outside their edge (px), so they're easy to hit blind. */
+const PEDAL_SLOP = 16;
 
 function enableTouch() {
 	if (!document.body.classList.contains('touch')) document.body.classList.add('touch');
@@ -89,130 +91,141 @@ export function initInput() {
 		btn.addEventListener('pointercancel', up);
 		btn.addEventListener('pointerleave', up);
 	}
+	const el = (/** @type {string} */ id) =>
+		/** @type {HTMLElement} */ (document.getElementById(id));
+	const unlockAudio = () => {
+		audio.init();
+		audio.resume();
+	};
+	/** A synthetic pointer (a test) can't be captured, which is fine: the zone still gets its moves. */
+	const capture = (/** @type {HTMLElement} */ zone, /** @type {PointerEvent} */ e) => {
+		try {
+			zone.setPointerCapture(e.pointerId);
+		} catch {
+			// not a real pointer
+		}
+	};
 	/**
-	 * Follow one finger in a zone. A synthetic pointer (a test) can't be
-	 * captured, which is fine: the zone still gets its moves.
+	 * Remember where and when a finger came down, to tell a tap from a hold.
 	 *
-	 * @param {HTMLElement} zone
-	 * @param {{ down: (e: PointerEvent) => void, move: (e: PointerEvent) => void, up: () => void }} on
+	 * @param {PointerEvent} e
 	 */
-	const track = (zone, on) => {
+	const tapStart = (e) => ({ x: e.clientX, y: e.clientY, t: performance.now(), moved: false });
+	/** @typedef {ReturnType<typeof tapStart>} Tap */
+	const tapMove = (/** @type {Tap} */ tap, /** @type {PointerEvent} */ e) => {
+		if (Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > TAP_PX) tap.moved = true;
+	};
+	const tapEnd = (/** @type {Tap} */ tap) => {
+		if (!tap.moved && performance.now() - tap.t < TAP_MS) pressed.add('honk');
+	};
+
+	// Left half: steering. A wheel appears under the thumb; only sideways movement counts.
+	{
+		const zone = el('steerZone');
+		const wheel = el('wheel');
+		const knob = el('wheelKnob');
 		/** @type {number | null} */
 		let id = null;
+		let ox = 0;
+		/** @type {Tap | null} */
+		let tap = null;
 		zone.addEventListener('pointerdown', (e) => {
 			if (id !== null) return;
 			e.preventDefault();
-			audio.init();
-			audio.resume();
-			try {
-				zone.setPointerCapture(e.pointerId);
-			} catch {
-				// not a real pointer
-			}
+			unlockAudio();
+			capture(zone, e);
 			id = e.pointerId;
-			on.down(e);
+			ox = e.clientX;
+			tap = tapStart(e);
+			touch.steer = 0;
+			wheel.style.left = `${e.clientX}px`;
+			wheel.style.top = `${e.clientY}px`;
+			knob.style.transform = '';
+			wheel.classList.add('on');
 		});
 		zone.addEventListener('pointermove', (e) => {
-			if (e.pointerId === id) on.move(e);
+			if (e.pointerId !== id) return;
+			if (tap) tapMove(tap, e);
+			let dx = e.clientX - ox;
+			if (Math.abs(dx) > STEER_R) {
+				// drag the wheel along so it never feels stuck at full lock
+				ox += dx - Math.sign(dx) * STEER_R;
+				dx = Math.sign(dx) * STEER_R;
+				wheel.style.left = `${ox}px`;
+			}
+			touch.steer = dx / STEER_R;
+			// the knob rides round the rim, like a mark on a steering wheel
+			knob.style.transform = `rotate(${touch.steer * 62}deg)`;
 		});
 		/** @param {PointerEvent} e */
 		const end = (e) => {
 			if (e.pointerId !== id) return;
 			id = null;
-			on.up();
+			touch.steer = 0;
+			wheel.classList.remove('on');
+			if (tap) tapEnd(tap);
+			tap = null;
 		};
 		zone.addEventListener('pointerup', end);
 		zone.addEventListener('pointercancel', end);
-	};
-	const el = (/** @type {string} */ id) =>
-		/** @type {HTMLElement} */ (document.getElementById(id));
-
-	// Left thumb: steering. Only sideways movement counts.
-	{
-		const ring = el('stick');
-		const knob = el('knob');
-		let ox = 0;
-		/** @param {PointerEvent} e */
-		const move = (e) => {
-			let dx = e.clientX - ox;
-			if (Math.abs(dx) > STEER_R) {
-				// drag the base along so the wheel never feels stuck at full lock
-				ox += dx - Math.sign(dx) * STEER_R;
-				dx = Math.sign(dx) * STEER_R;
-				ring.style.left = `${ox}px`;
-			}
-			touch.steer = dx / STEER_R;
-			knob.style.transform = `translateX(${dx}px)`;
-		};
-		track(el('steerZone'), {
-			down: (e) => {
-				ox = e.clientX;
-				touch.steer = 0;
-				ring.style.left = `${e.clientX}px`;
-				ring.style.top = `${e.clientY}px`;
-				knob.style.transform = '';
-				ring.classList.add('on');
-			},
-			move,
-			up: () => {
-				touch.steer = 0;
-				// back to its resting spot in the corner
-				ring.style.left = '';
-				ring.style.top = '';
-				knob.style.transform = '';
-				ring.classList.remove('on');
-			},
-		});
 	}
 
-	// Right thumb: the pedal. Down is gas; pull down to brake, push back up for gas.
+	// Right half: GAS and BRAKE. Each finger presses whichever pedal it is over,
+	// so a thumb can roll from one to the other without lifting.
 	{
-		const pedal = el('pedal');
-		const knob = el('pedalKnob');
-		/** The highest the thumb has been while on the gas, or the lowest while braking. */
-		let ref = 0;
-		const show = () => {
-			pedal.classList.toggle('brake', touch.brake);
-			knob.style.transform = touch.brake ? 'translateY(34px)' : '';
+		const zone = el('pedalZone');
+		const pedals = /** @type {const} */ ([
+			['gas', el('btnGas')],
+			['brake', el('btnBrake')],
+		]);
+		/** @type {Map<number, { on: 'gas' | 'brake' | null, tap: Tap }>} */
+		const fingers = new Map();
+		/** @param {PointerEvent} e */
+		const over = (e) => {
+			for (const [name, btn] of pedals) {
+				const r = btn.getBoundingClientRect();
+				if (
+					e.clientX > r.left - PEDAL_SLOP &&
+					e.clientX < r.right + PEDAL_SLOP &&
+					e.clientY > r.top - PEDAL_SLOP &&
+					e.clientY < r.bottom + PEDAL_SLOP
+				)
+					return name;
+			}
+			return null;
 		};
-		track(el('pedalZone'), {
-			down: (e) => {
-				ref = e.clientY;
-				touch.gas = true;
-				touch.brake = false;
-				pedal.style.left = `${e.clientX}px`;
-				pedal.style.top = `${e.clientY}px`;
-				pedal.classList.add('on');
-				show();
-			},
-			move: (e) => {
-				const y = e.clientY;
-				if (touch.gas) {
-					ref = Math.min(ref, y);
-					if (y - ref > BRAKE_PULL) {
-						touch.gas = false;
-						touch.brake = true;
-						ref = y;
-					}
-				} else {
-					ref = Math.max(ref, y);
-					if (ref - y > GAS_PUSH) {
-						touch.gas = true;
-						touch.brake = false;
-						ref = y;
-					}
-				}
-				show();
-			},
-			up: () => {
-				touch.gas = false;
-				touch.brake = false;
-				pedal.style.left = '';
-				pedal.style.top = '';
-				pedal.classList.remove('on');
-				show();
-			},
+		const sync = () => {
+			for (const [name, btn] of pedals) {
+				const held = [...fingers.values()].some((f) => f.on === name);
+				touch[name] = held;
+				btn.classList.toggle('on', held);
+			}
+		};
+		zone.addEventListener('pointerdown', (e) => {
+			e.preventDefault();
+			unlockAudio();
+			capture(zone, e);
+			fingers.set(e.pointerId, { on: over(e), tap: tapStart(e) });
+			sync();
 		});
+		zone.addEventListener('pointermove', (e) => {
+			const f = fingers.get(e.pointerId);
+			if (!f) return;
+			tapMove(f.tap, e);
+			f.on = over(e);
+			sync();
+		});
+		/** @param {PointerEvent} e */
+		const end = (e) => {
+			const f = fingers.get(e.pointerId);
+			if (!f) return;
+			fingers.delete(e.pointerId);
+			// A tap on open road honks; a tap on a pedal was just a dab of gas or brake
+			if (!f.on) tapEnd(f.tap);
+			sync();
+		};
+		zone.addEventListener('pointerup', end);
+		zone.addEventListener('pointercancel', end);
 	}
 	const portrait = /** @type {HTMLElement} */ (document.getElementById('portrait'));
 	portrait.addEventListener('pointerdown', (e) => {
