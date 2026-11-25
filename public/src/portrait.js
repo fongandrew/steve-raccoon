@@ -2,7 +2,7 @@
 // in front of his face, scissored to the portrait element, plus his mood label.
 import * as THREE from '../vendor/three.module.js';
 import { $ } from './hud.js';
-import { renderer, scene, steve, truck } from './scene.js';
+import { GFX, renderer, scene, steve, truck } from './scene.js';
 import { state, T } from './state.js';
 import { steveAnim } from './truck-anim.js';
 
@@ -10,12 +10,21 @@ const tmpV2 = new THREE.Vector3();
 
 const faceCam = new THREE.PerspectiveCamera(40, 1, 0.05, 60);
 const portraitEl = $('portrait');
+// The Steve cam draws the scene a second time each frame; low graphics skips it
+// and shows a still face instead.
+const LIVE = GFX !== 'low';
+if (!LIVE) portraitEl.classList.add('still');
 const _fp = new THREE.Vector3();
 const _fh = new THREE.Vector3();
 /** @typedef {'chomp' | 'hangry' | 'hungry' | 'zoom' | 'hic' | 'happy' | 'peckish'} Mood */
 
 let lastMood = '';
 export function renderPortrait() {
+	if (LIVE) renderFace();
+	updateMood();
+}
+
+function renderFace() {
 	const r = portraitEl.getBoundingClientRect();
 	if (r.width < 10) return;
 	truck.body.updateMatrixWorld(true);
@@ -45,7 +54,9 @@ export function renderPortrait() {
 	renderer.shadowMap.autoUpdate = true;
 	renderer.setScissorTest(false);
 	renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+}
 
+function updateMood() {
 	// Mood frame + label
 	/** @type {Mood} */
 	let mood;
@@ -57,7 +68,7 @@ export function renderPortrait() {
 	else mood = state.hunger > 60 ? 'happy' : 'peckish';
 	if (mood !== lastMood) {
 		lastMood = mood;
-		portraitEl.className = mood;
+		portraitEl.className = LIVE ? mood : `${mood} still`;
 		/** @type {Record<Mood, [string, string]>} */
 		const M = {
 			chomp: ['😋', 'nom nom'],

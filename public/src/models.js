@@ -1738,8 +1738,8 @@ export function makeStatue() {
 }
 
 /**
- * A shiny lost treasure: a spinning brilliant-cut jewel. Flat facets and a
- * glossy material make it flash as it turns; a little of its own colour glows
+ * A shiny lost treasure: a spinning brilliant-cut jewel. Each facet has its
+ * own shade, so it flashes as it turns; a little of its own colour glows
  * through so it still reads in shade and at dusk.
  * @param {number} color
  * @returns {TreasureModel}
@@ -1748,21 +1748,17 @@ export function makeTreasure(color) {
 	const g = new THREE.Group();
 	const spin = new THREE.Group();
 	g.add(spin);
-	const mat = new THREE.MeshStandardMaterial({
-		color,
-		emissive: color,
-		emissiveIntensity: 0.25,
-		roughness: 0.12,
-		metalness: 0.15,
-		flatShading: true,
-		vertexColors: true,
-	});
+	// The same toon material as everything else in town (one less shader for a
+	// phone to compile), with the facets coming from per-face normals and shades.
+	const mat = glow(color, 0.3);
+	mat.vertexColors = true;
 	const FACETS = 8;
 	const GIRDLE = 0.8;
 	// Cut glass has light and dark facets side by side whatever the lighting, so
 	// each face gets its own shade (and the table on top is nearly white).
 	const facet = (/** @type {THREE.BufferGeometry} */ indexed, /** @type {number[]} */ shades) => {
 		const geo = indexed.toNonIndexed();
+		geo.computeVertexNormals(); // one normal per face: hard facet edges
 		const pos = /** @type {THREE.BufferAttribute} */ (geo.getAttribute('position'));
 		const nor = /** @type {THREE.BufferAttribute} */ (geo.getAttribute('normal'));
 		const col = new Float32Array(pos.count * 3);

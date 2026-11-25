@@ -136,6 +136,15 @@ Each system is one module. The shift's state (`state`) and the truck's body (`T`
 | `hud.js` / `minimap.js` / `portrait.js` / `shift.js`                    | HUD, toasts and popups / minimap / Steve cam / title, pause and results screens, shift reset                    |
 | `input.js` / `audio.js`                                                 | keyboard, touch stick and buttons / synthesized sound effects and music                                         |
 
+### Graphics levels
+
+`scene.js` picks one of three levels: `high` on desktops (antialiasing, 4096 shadow map), `mobile`
+on phones and tablets (no antialiasing, 1024 shadow map, 1.5x pixel ratio) and `low` (no shadows,
+1x pixel ratio, a still picture instead of the live Steve cam). If the browser ever takes the WebGL
+context away, which shows up as a sad-face icon where the town should be, the game switches that
+device to `low` and reloads once. Add `?gfx=high`, `?gfx=mobile` or `?gfx=low` to the URL to force a
+level; the choice is remembered.
+
 ### Tests
 
 - `tests/*.test.js` (Vitest, jsdom) cover the pure modules: helpers, scoring and reviews, state

@@ -15,7 +15,7 @@ import { updateParticles } from './particles.js';
 import { updatePigeons } from './pigeons.js';
 import { updatePile } from './pile.js';
 import { renderPortrait } from './portrait.js';
-import { camera, renderer, scene, world } from './scene.js';
+import { camera, GFX, gpu, renderer, scene, world } from './scene.js';
 import {
 	endPractice,
 	endShift,
@@ -119,7 +119,7 @@ function frame() {
 	const dt = Math.min((now - lastNow) / 1000, MAX_DT);
 	lastNow = now;
 	update(dt);
-	if (drawing) render();
+	if (drawing && !gpu.lost) render();
 }
 
 /** Boot the game: wire the DOM, park the truck on the title screen, start the loop. */
@@ -189,6 +189,8 @@ export function start() {
 		},
 		/** Photo-mode camera: `{ pos: [x, y, z], look: [x, y, z], fov? }`, or `null` to release. */
 		setCamera: setCameraOverride,
+		/** Graphics level in use: 'high', 'mobile' or 'low' (see scene.js). */
+		gfx: GFX,
 	};
 }
 

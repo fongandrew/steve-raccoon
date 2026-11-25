@@ -32,6 +32,10 @@ the module map.
   DOM listeners go in an `init*()` function called from `start()`.
 - The town is built from seeded RNG (`rng()` in `world.js`) and must come out identical on every
   load; `tests/world.test.js` checks this. Use `rand` there, not `Math.random`.
+- Graphics come in three levels (`GFX` in `scene.js`: `high`, `mobile`, `low`). If the browser
+  throws the WebGL context away (Chrome's sad-face canvas on phones), the game remembers `low`
+  and reloads once. `?gfx=high|mobile|low` forces a level. New effects should check `GFX` before
+  adding GPU cost, and should reuse the toon materials rather than new shader types.
 - `window.__game` is the test/debug hook. `tick(seconds)` steps the game without drawing: use it
   in specs instead of waiting on frames (software WebGL draws a couple of frames a second).
 

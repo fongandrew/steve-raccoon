@@ -3,7 +3,7 @@
 import * as THREE from '../vendor/three.module.js';
 import { makeCloud, nightMats } from './models.js';
 import { spawnParticle } from './particles.js';
-import { camera, scene, skyColor, SMALL_DEVICE, world } from './scene.js';
+import { camera, GFX, scene, skyColor, world } from './scene.js';
 import { T } from './state.js';
 import { LAWN_Y, rng } from './world.js';
 
@@ -101,8 +101,9 @@ const hillBase = new THREE.Color(0x6fbf62);
 const hemi = new THREE.HemisphereLight(0xffffff, 0x9cc27a, 1.6);
 scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffffff, 2.2);
-sun.castShadow = true;
-sun.shadow.mapSize.set(SMALL_DEVICE ? 2048 : 4096, SMALL_DEVICE ? 2048 : 4096);
+sun.castShadow = GFX !== 'low';
+const SHADOW_MAP = GFX === 'high' ? 4096 : 1024;
+sun.shadow.mapSize.set(SHADOW_MAP, SHADOW_MAP);
 Object.assign(sun.shadow.camera, { left: -75, right: 75, top: 75, bottom: -75, near: 1, far: 260 });
 sun.shadow.bias = -0.0005;
 sun.shadow.normalBias = 0.05;

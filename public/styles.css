@@ -814,3 +814,17 @@ body.touch .keysOnly,
 body.touch .touchOnly {
 	display: block;
 }
+
+/* Low graphics: no live Steve cam, so the portrait is a still face */
+#portrait.still {
+	background: #cfe8f7;
+}
+
+#portrait.still::before {
+	content: '🦝';
+	position: absolute;
+	inset: 0 0 26px;
+	display: grid;
+	place-items: center;
+	font-size: 64px;
+}
