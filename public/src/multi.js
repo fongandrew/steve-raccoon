@@ -6,7 +6,8 @@
 //   clock is the relay's time minus the agreed start.
 // - owned: each truck. Its player simulates it and sends ~20 snapshots a
 //   second; everyone else draws it a moment in the past through an
-//   `OwnedBuffer` (rivals.js) and bumps their own truck off it (truck.js).
+//   `OwnedBuffer` (rivals.js) and bumps their own truck off it (truck.js),
+//   telling the other truck's owner what shove it is owed in return.
 // - contested: cans, dumpsters and treasures. They only change through relay
 //   events, which every client applies in the relay's order with the reducer
 //   in contest.js, so two trucks reaching for one can always agree who won.
@@ -21,13 +22,14 @@ import { ACTIVE_CANS } from './constants.js';
 import { applyClaim, freshContest, standings } from './contest.js';
 import { announceBin, rivalTookBin, setBinFull, startLift } from './loader.js';
 import { lerpAngle, lerpNumber, OwnedBuffer } from './net/owned.js';
-import { KIND } from './net/protocol.js';
+import { decodeJson, KIND } from './net/protocol.js';
 import { addRival, clearRivals, placeRival, removeRival, rivals } from './rivals.js';
 import { activeCansFor, MAX_PLAYERS, raccoonFor } from './roster.js';
 import { world } from './scene.js';
 import { beginOnlineShift, showStandings } from './shift.js';
 import { state, T } from './state.js';
 import { collectTreasure, rivalTookTreasure, treasures } from './treasures.js';
+import { takeBump } from './truck.js';
 import {
 	decodeEvent,
 	decodeKeyframe,
@@ -138,6 +140,20 @@ export class Session {
 	/** @param {Claim} claim */
 	claim(claim) {
 		if (this.shift) this.net.sendEvent(encodeEvent(claim));
+	}
+
+	/**
+	 * We ran into another truck. Its owner's game may not have seen the hit
+	 * (it sees us a moment in the past), so say what shove it is owed. A control
+	 * message, not an event: it matters now or never, and must not be replayed.
+	 *
+	 * @param {number} slot
+	 * @param {number} ix
+	 * @param {number} iz
+	 */
+	bumped(slot, ix, iz) {
+		const r2 = (/** @type {number} */ v) => Math.round(v * 100) / 100;
+		this.net.sendControl({ type: 'bump', to: slot, ix: r2(ix), iz: r2(iz) });
 	}
 
 	/** @returns {Standing[]} */
@@ -297,6 +313,13 @@ export class Session {
 			const snap = decodeSnap(env.payload);
 			if (snap.shift === this.shift && this.shift) {
 				this.remote.push(env.slot, env.serverTick, snap);
+			}
+			return;
+		}
+		if (env.kind === KIND.CONTROL) {
+			const msg = decodeJson(env.payload);
+			if (msg?.type === 'bump' && msg.to === this.net.slot && env.slot !== this.net.slot) {
+				takeBump(env.slot, Number(msg.ix) || 0, Number(msg.iz) || 0);
 			}
 			return;
 		}

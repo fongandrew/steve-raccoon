@@ -1,6 +1,7 @@
 // The other trucks in a room. Each is a full truck model in its raccoon's
 // colours, moved to wherever the room's snapshots say its owner has driven
 // it. Nothing here simulates them: the local truck bumps off them in truck.js.
+import { mergeGeometries } from '../vendor/addons/utils/BufferGeometryUtils.js';
 import * as THREE from '../vendor/three.module.js';
 import { $ } from './hud.js';
 import { makeTruck } from './models.js';
@@ -32,6 +33,63 @@ import { camera, scene } from './scene.js';
 export const rivals = new Map();
 
 const tmp = new THREE.Vector3();
+const tmpM = new THREE.Matrix4();
+
+/**
+ * A truck is a couple of hundred little boxes. Ours needs them separate (the
+ * arms, the loader and Steve all move), but a rival's only moving parts are
+ * its wheels, beacon and load, so everything else is merged into one mesh per
+ * material: a handful of draw calls instead of hundreds, per truck, per frame.
+ *
+ * @param {import('./models.js').TruckModel} model
+ */
+function bake(model) {
+	const root = model.group;
+	root.updateMatrixWorld(true);
+	const toRoot = root.matrixWorld.clone().invert();
+	/** @type {Set<THREE.Object3D>} */
+	const moving = new Set([...model.wheels, ...model.frontWheels, model.beacon, model.fill]);
+	/** @type {Map<THREE.Material, { geos: THREE.BufferGeometry[], cast: boolean, receive: boolean }>} */
+	const buckets = new Map();
+	/** @type {THREE.Mesh[]} */
+	const merged = [];
+	/** @param {THREE.Object3D} obj */
+	const walk = (obj) => {
+		if (moving.has(obj)) return;
+		const o = /** @type {THREE.Mesh} */ (obj);
+		const m = /** @type {THREE.MeshToonMaterial | THREE.Material[]} */ (o.material);
+		// Lettering (textured) and anything see-through stays as it is
+		if (o.isMesh && !Array.isArray(m) && !m.map && !m.transparent) {
+			const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+			for (const k of Object.keys(g.attributes)) {
+				if (k !== 'position' && k !== 'normal') g.deleteAttribute(k);
+			}
+			g.clearGroups();
+			g.applyMatrix4(tmpM.multiplyMatrices(toRoot, o.matrixWorld));
+			let b = buckets.get(m);
+			if (!b) {
+				b = { geos: [], cast: o.castShadow, receive: o.receiveShadow };
+				buckets.set(m, b);
+			}
+			b.geos.push(g);
+			merged.push(o);
+		}
+		for (const child of obj.children) walk(child);
+	};
+	walk(root);
+	for (const o of merged) {
+		// keep any children (a moving part can hang off a static one) in place
+		for (const child of [...o.children]) root.attach(child);
+		o.removeFromParent();
+	}
+	for (const [mat, b] of buckets) {
+		const mesh = new THREE.Mesh(mergeGeometries(b.geos), mat);
+		mesh.castShadow = b.cast;
+		mesh.receiveShadow = b.receive;
+		root.add(mesh);
+		for (const g of b.geos) g.dispose();
+	}
+}
 
 /**
  * @param {number} slot
@@ -43,6 +101,7 @@ export function addRival(slot) {
 	const who = raccoonFor(slot);
 	const model = makeTruck();
 	model.setLivery(who);
+	bake(model);
 	model.group.visible = false; // until we know where it is
 	scene.add(model.group);
 	const tag = document.createElement('div');

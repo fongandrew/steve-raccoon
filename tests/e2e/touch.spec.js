@@ -1,6 +1,6 @@
 import { devices, expect, test } from '@playwright/test';
 
-// A phone held sideways: left thumb steers, right thumb has GAS and BRAKE.
+// A phone held sideways: left thumb steers, right thumb has GAS and BACK (brake, then reverse).
 test.use({ ...devices['Pixel 7 landscape'] });
 
 /**
@@ -81,6 +81,7 @@ const touchState = (/** @type {import('@playwright/test').Page} */ page) =>
 test('shows the pedals, and no drift or honk button', async ({ page }) => {
 	await expect(page.locator('#btnGas')).toBeVisible();
 	await expect(page.locator('#btnBrake')).toBeVisible();
+	await expect(page.locator('#btnBrake')).toHaveText('BACK'); // it brakes and reverses
 	await expect(page.locator('#wheel')).toBeHidden(); // until a thumb lands
 	await expect(page.locator('#btnDrift')).toHaveCount(0);
 	await expect(page.locator('#btnHonk')).toHaveCount(0);
@@ -122,7 +123,7 @@ test('GAS goes, the left thumb steers', async ({ page }) => {
 	expect(await touchState(page)).toMatchObject({ gas: false, brake: false });
 });
 
-test('BRAKE stops, then reverses; a thumb can roll between the pedals', async ({ page }) => {
+test('BACK brakes, then reverses; a thumb can roll between the pedals', async ({ page }) => {
 	const gas = await centre(page, 'btnGas');
 	const brake = await centre(page, 'btnBrake');
 	await finger(page, 'pedalZone', 'pointerdown', 2, gas.x, gas.y);
@@ -185,15 +186,15 @@ test('braking through a turn at speed drifts, and letting go boosts', async ({ p
 });
 
 test('a quick tap off the buttons honks; holds, slides and pedal dabs do not', async ({ page }) => {
-	const honked = async () => {
-		const cd = await page.evaluate(() => {
-			const g = window.__game;
-			g.state.honkCd = 0;
-			g.tick(1 / 60);
-			return g.state.honkCd;
+	// The horn has a cooldown that starts when it sounds. Clear it, do the
+	// thing, and see whether it is running again. (The game's own frame loop may
+	// handle the tap before `tick` does; either way the cooldown shows it.)
+	const ready = () => page.evaluate(() => void (window.__game.state.honkCd = 0));
+	const honked = () =>
+		page.evaluate(() => {
+			window.__game.tick(1 / 60);
+			return window.__game.state.honkCd > 0;
 		});
-		return cd > 0;
-	};
 	const gas = await centre(page, 'btnGas');
 
 	// Tap on the road, right side and left side
@@ -201,21 +202,25 @@ test('a quick tap off the buttons honks; holds, slides and pedal dabs do not', a
 		['pedalZone', 560, 150],
 		['steerZone', 200, 250],
 	]) {
+		await ready();
 		await tap(page, zone, x, y);
 		expect(await honked(), zone).toBe(true);
 	}
 
 	// A dab on the gas is not a honk
+	await ready();
 	await tap(page, 'pedalZone', gas.x, gas.y);
 	expect(await honked()).toBe(false);
 
 	// Nor is a steering flick
+	await ready();
 	await finger(page, 'steerZone', 'pointerdown', 5, 200, 250);
 	await finger(page, 'steerZone', 'pointermove', 5, 230, 250);
 	await finger(page, 'steerZone', 'pointerup', 5, 230, 250);
 	expect(await honked()).toBe(false);
 
 	// Nor is resting a thumb
+	await ready();
 	await finger(page, 'steerZone', 'pointerdown', 5, 200, 250);
 	await page.waitForTimeout(350);
 	await finger(page, 'steerZone', 'pointerup', 5, 200, 250);

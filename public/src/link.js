@@ -15,6 +15,7 @@
  * @property {() => number} playerCount trucks in the room right now
  * @property {() => { x: number, z: number }[]} truckSpots where every truck is
  * @property {(claim: Claim) => void} claim ask the room for something contested
+ * @property {(slot: number, ix: number, iz: number) => void} bumped we hit that truck: tell its owner the shove it is owed
  * @property {() => Standing[]} table everyone's score, best first
  * @property {(dt: number) => void} frame once a frame: hear from the room, report our truck
  * @property {() => boolean} startNextShift host only: start a shift for the whole room

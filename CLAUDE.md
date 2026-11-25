@@ -27,7 +27,8 @@ the module map.
   a module-level `let` would carry over and mute the next shift).
 - `scene.js` creates the renderer, scene, camera, `world` and truck model once, at import. It
   needs a real DOM and WebGL, so unit tests can only import modules that don't import it
-  (`util`, `review`, `constants`, `lines`, `state`, `world`, `models`, `props`).
+  (`util`, `review`, `constants`, `lines`, `state`, `world`, `models`, `props`, `contest`, `wire`,
+  `roster`).
 - One module per system; `main.js` only wires them into `update(dt)` / `render()`. Module-level
   DOM listeners go in an `init*()` function called from `start()`.
 - The town is built from seeded RNG (`rng()` in `world.js`) and must come out identical on every
@@ -39,12 +40,32 @@ the module map.
 - `window.__game` is the test/debug hook. `tick(seconds)` steps the game without drawing: use it
   in specs instead of waiting on frames (software WebGL draws a couple of frames a second).
 
+## Multiplayer
+
+- `public/src/net/` and `relay/` are **generated** from pomelo-penguin's `packages/netplay`
+  (`npm run net:sync`, needs `../pomelo-penguin` or `NETPLAY_REPO`). Don't hand-edit them. Engine
+  changes belong in pomelo-penguin. The relay must never parse game payloads.
+- Game modules never import `multi.js`. They read `link.session` (`link.js`): null solo, the room
+  otherwise. Anything two trucks could both want goes through `tryClaim()` and only happens when
+  the room confirms it (`Session.confirm` in `multi.js`); solo does it directly.
+- Contested rules live in the pure reducer `contest.js`; the wire format in `wire.js`. Both are
+  unit-tested without a DOM, so keep them free of scene imports.
+- Only the host (`link.session.isHost()`) decides random things everyone must agree on (which
+  house puts a can out), and sends them as events. Never `Math.random` a shared outcome locally.
+- Each client moves only its own truck. Other trucks (`rivals.js`) are positioned from snapshots;
+  `bumpRivals()` in `truck.js` is one half of a collision, and the other player's game does the
+  mirror image.
+- Geese, townsfolk, pigeons, balls and props are **not** synced: each screen has its own.
+- The town must be identical for everyone in a room, so its size and seed can't vary by device.
+  Rooms pin on `buildId` (stamped into `version.json` by the build).
+
 ## Commands
 
-`npm run dev` (port 3000), `npm test`, `npm run test:e2e`, `npm run check`, `npm run build`,
-`npm run vendor` / `vendor:check`, `npm run deploy:draft` (preview URL), `npm run deploy`
+`npm run dev` (port 3000), `npm run dev:relay` (port 8788), `npm test`, `npm run test:e2e`, `npm run check`, `npm run build`,
+`npm run vendor` / `vendor:check`, `npm run net:sync` / `net:check`, `npm run deploy:draft` (preview URL), `npm run deploy`
 (production).
 
 Netlify site ID: `3e3fd768-c76d-4518-a20d-bbe3e8cbe9f6` (baked into the deploy scripts). Deploys upload
 `dist/` via `npx netlify-cli@27`; needs `netlify login` or `NETLIFY_AUTH_TOKEN`. Nothing deploys
-on push (the GitHub Pages workflow is gone).
+on push (the GitHub Pages workflow is gone). Online play only works from a `*.pomelopenguin.com`
+origin (the relay's allowlist).

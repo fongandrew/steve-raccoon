@@ -27,7 +27,7 @@ const KEYMAP = {
 	Enter: 'enter',
 };
 // --- Touch: the left thumb steers (a wheel appears where it lands; slide
-// sideways to turn), the right thumb has a GAS and a BRAKE button. There is no
+// sideways to turn), the right thumb has GAS and BACK (brake, then reverse). There is no
 // drift button: braking through a turn at speed is the drift (see truck.js).
 // A quick tap anywhere that isn't a button honks, tapping Steve's portrait is
 // a snack, and the pause button has everything else.
@@ -170,7 +170,7 @@ export function initInput() {
 		zone.addEventListener('pointercancel', end);
 	}
 
-	// Right half: GAS and BRAKE. Each finger presses whichever pedal it is over,
+	// Right half: GAS and BACK (the brake). Each finger presses whichever pedal it is over,
 	// so a thumb can roll from one to the other without lifting.
 	{
 		const zone = el('pedalZone');

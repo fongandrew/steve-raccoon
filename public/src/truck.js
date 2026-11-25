@@ -4,6 +4,7 @@ import { audio } from './audio.js';
 import { GRAVITY, MAX_SPEED } from './constants.js';
 import { narrate, popup, toast } from './hud.js';
 import { keys, touch } from './input.js';
+import { link } from './link.js';
 import { burst, leafBurst } from './particles.js';
 import { rivals } from './rivals.js';
 import { truck, world } from './scene.js';
@@ -248,12 +249,20 @@ const BUMP_BOUNCE = 0.55;
 /**
  * Trucks are solid to each other. Each player's game only ever moves its own
  * truck: it takes half of the push apart and its own half of the bounce (two
- * equal trucks swapping momentum), and the other player's game does the
- * mirror image with the same numbers.
+ * equal trucks swapping momentum).
+ *
+ * The other half can't be left for the other game to work out for itself: it
+ * sees this truck a moment in the past, and by then this truck has already
+ * bounced away, so from there the two may never quite touch. So whoever sees
+ * the hit tells the other truck's owner what shove it is owed (`takeBump`).
+ * If both saw it, each has already taken its half and ignores the note.
  */
 function bumpRivals() {
 	let hardest = 0;
+	/** @type {import('./rivals.js').Rival | null} */
 	let who = null;
+	let theirX = 0;
+	let theirZ = 0;
 	for (const r of rivals.values()) {
 		if (!r.seen || Math.abs(r.y - T.y) > 2.6) continue;
 		if (Math.abs(r.x - T.pos.x) > 9 || Math.abs(r.z - T.pos.z) > 9) continue;
@@ -279,12 +288,53 @@ function bumpRivals() {
 					if (-closing > hardest) {
 						hardest = -closing;
 						who = r;
+						// equal and opposite
+						theirX = -nx * kick;
+						theirZ = -nz * kick;
 					}
 				}
 			}
 		}
 	}
-	if (!who || hardest < 4) return;
+	if (!who || hardest < 2) return;
+	const now = performance.now();
+	if (now - (lastHit.get(who.slot) ?? -1e9) > BUMP_NOTE_MS) {
+		link.session?.bumped(who.slot, theirX, theirZ);
+	}
+	lastHit.set(who.slot, now);
+	bumpFeedback(hardest);
+}
+
+/** When this game last worked out a hit with each rival (ms), by slot. */
+/** @type {Map<number, number>} */
+const lastHit = new Map();
+/** One note per hit: a truck grinding along another doesn't send a stream of them. */
+const BUMP_NOTE_MS = 300;
+
+/**
+ * Another truck's game saw it hit us, and this is the shove we are owed.
+ * Ignored if we saw the same hit ourselves and have already bounced.
+ *
+ * @param {number} from their slot
+ * @param {number} ix change in velocity, x
+ * @param {number} iz change in velocity, z
+ */
+export function takeBump(from, ix, iz) {
+	const now = performance.now();
+	if (now - (lastHit.get(from) ?? -1e9) < BUMP_NOTE_MS) return;
+	lastHit.set(from, now);
+	if (state.mode !== 'playing' && state.mode !== 'countdown') return;
+	const size = Math.hypot(ix, iz);
+	if (!(size > 0)) return;
+	const k = Math.min(1, 30 / size); // nothing a truck could not really have done
+	T.vel.x += ix * k;
+	T.vel.z += iz * k;
+	bumpFeedback((size * k * 2) / (1 + BUMP_BOUNCE));
+}
+
+/** @param {number} hardest closing speed of the hit */
+function bumpFeedback(hardest) {
+	if (hardest < 4) return;
 	bonk(hardest * 0.8);
 	if (state.mode !== 'playing' || state.time - state.lastBump < 1) return;
 	state.lastBump = state.time;
