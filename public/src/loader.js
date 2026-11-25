@@ -181,7 +181,7 @@ export function announceBin() {
  * Online: another truck hoisted this dumpster.
  *
  * @param {Bin} b
- * @param {string} who
+ * @param {string | null} who null to just empty it, without a word
  */
 export function rivalTookBin(b, who) {
 	if (b.state !== 'out') return;
@@ -190,7 +190,9 @@ export function rivalTookBin(b, who) {
 	b.hinted = false;
 	b.marker.group.visible = false;
 	b.group.rotation.z = 0;
-	if (Math.hypot(b.x - T.pos.x, b.z - T.pos.z) < 45) popup(`${who} got it!`, b.home, 'bad', 3);
+	if (who && Math.hypot(b.x - T.pos.x, b.z - T.pos.z) < 45) {
+		popup(`${who} got it!`, b.home, 'bad', 3);
+	}
 }
 
 /** @param {Bin} b */

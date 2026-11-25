@@ -21,7 +21,7 @@
 		<meta name="theme-color" content="#2d936c" />
 		<link rel="stylesheet" href="./styles.css" />
 	</head>
-	<body>
+	<body class="loading">
 		<div id="game"></div>
 
 		<div id="hud" class="hidden">
@@ -117,6 +117,7 @@
 						Ever.
 					</li>
 				</ul>
+				<p id="loadingMsg" role="status">🚛 Warming up the truck…</p>
 				<button id="startBtn" class="big">Start Shift</button>
 				<div class="pauseRow">
 					<button id="practiceBtn" class="mini">🚧 Practice (no clock)</button>
@@ -369,6 +370,23 @@
 			</div>
 		</div>
 
+		<script>
+			// Until the game has loaded and built the town, the menu's buttons do
+			// nothing, so they stay hidden behind a "warming up" line (see
+			// `body.loading` in styles.css; main.js lifts it). If the game's code
+			// fails to load at all, say so instead of warming up forever.
+			window.addEventListener(
+				'error',
+				function (e) {
+					if (!document.body.classList.contains('loading')) return;
+					const failedFile = e.target && e.target.tagName === 'SCRIPT';
+					if (!failedFile && !e.message) return;
+					document.getElementById('loadingMsg').textContent =
+						"😿 The game didn't load. Check your connection and reload the page.";
+				},
+				true,
+			);
+		</script>
 		<script type="module" src="./src/main.js"></script>
 	</body>
 </html>

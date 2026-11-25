@@ -139,6 +139,7 @@ export async function connect(code) {
 		},
 		onPresence: (msg) => mine()?.session.onPresence(msg),
 		onMessage: (env) => mine()?.session.onMessage(env),
+		onResume: () => mine()?.session.onResume(),
 		onNeedKeyframe: () => mine()?.session.keyframe(),
 		onError: (err) => {
 			if (!mine()) return;

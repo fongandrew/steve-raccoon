@@ -150,11 +150,11 @@ export function collectTreasure(t) {
  * Online: another truck found this one.
  *
  * @param {Treasure} t
- * @param {string} who
+ * @param {string | null} who null to just mark it gone, without a word
  */
 export function rivalTookTreasure(t, who) {
 	if (t.found) return;
 	t.found = true;
 	t.group.visible = false;
-	if (state.mode === 'playing') toast(`💎 ${who} found ${t.name}.`, 3);
+	if (who && state.mode === 'playing') toast(`💎 ${who} found ${t.name}.`, 3);
 }

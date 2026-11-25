@@ -151,6 +151,8 @@ export function start() {
 		navigator.serviceWorker?.controller?.postMessage({ type: 'ROOM_ACTIVE', active: !!room() });
 	}, 1000);
 	frame();
+	// The first frame is drawn and every button is wired: open the menu for business
+	document.body.classList.remove('loading');
 
 	// Test/debug hook: read state, drive deterministic scenarios. Playwright
 	// specs and screenshot scripts go through this, never through pixels.
@@ -223,6 +225,8 @@ export function start() {
 			players: () => room()?.session.lobby() ?? [],
 			table: () => room()?.session.table() ?? [],
 			start: () => room()?.session.startNextShift() ?? false,
+			/** Cut the connection, as a phone losing signal would; the client reconnects by itself. */
+			dropConnection: () => room()?.net.ws?.close(),
 			/** Bring the end of the shift `seconds` closer, on this screen only. */
 			fastForward: (/** @type {number} */ seconds) => {
 				const o = room();

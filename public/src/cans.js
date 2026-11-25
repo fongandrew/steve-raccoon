@@ -94,12 +94,12 @@ export function grabConfirmed(h) {
  * Online: another truck got this can.
  *
  * @param {House} h
- * @param {string} who
+ * @param {string | null} who null to just take the can in, without a word
  */
 export function rivalTookCan(h, who) {
 	if (h.state !== 'out') return;
 	emptied(h);
-	if (Math.hypot(h.canX - T.pos.x, h.canZ - T.pos.z) < 45) {
+	if (who && Math.hypot(h.canX - T.pos.x, h.canZ - T.pos.z) < 45) {
 		popup(`${who} got it!`, canFor(h).group.position.clone(), 'bad', 1);
 	}
 }

@@ -156,6 +156,43 @@ test('a shift for two: same town, shared cans, bumps and a leaderboard', async (
 		'Steve',
 	]);
 
+	// Gary's phone loses signal and reconnects. The relay replays the shift so
+	// far; none of it may count twice (no second helping of that can's bags).
+	// (Once the emptied can has gone back in: that's when a replayed "can out"
+	// followed by a replayed "Gary took it" would look like a brand new one.)
+	await expect
+		.poll(
+			() =>
+				b.evaluate((i) => {
+					window.__game.tick(1);
+					return window.__game.world.houses[i].state;
+				}, target),
+			{ timeout: 15000 },
+		)
+		.toBe('idle');
+	const held = await b.evaluate(() => {
+		const s = window.__game.state;
+		return { cans: s.stats.cans, bags: s.stats.bags, load: s.load, score: s.score };
+	});
+	await b.evaluate(() => {
+		const g = window.__game;
+		g.teleport(27, 60, 0); // nowhere near any can
+		g.net.dropConnection();
+	});
+	await b.waitForFunction(() => window.__game.net.status() !== 'live', null, { timeout: 15000 });
+	await live(b);
+	await b.waitForTimeout(1500);
+	expect(
+		await b.evaluate(() => {
+			const g = window.__game;
+			g.tick(0.5);
+			const s = g.state;
+			return { cans: s.stats.cans, bags: s.stats.bags, load: s.load, score: s.score };
+		}),
+	).toEqual(held);
+	await expect.poll(() => cans(b)).toEqual(await cans(a));
+	expect(await b.evaluate(() => window.__game.state.mode)).toBe('playing');
+
 	// Two trucks reach for the same can at once: exactly one gets it
 	const contested = (await cans(a)).find((i) => i !== target);
 	const park = (/** @type {Page} */ page, /** @type {number} */ side) =>

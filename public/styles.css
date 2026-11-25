@@ -1041,3 +1041,31 @@ body.touch .touchOnly {
 .nameTag.stale {
 	opacity: 0.45;
 }
+
+/* ---------- Loading ---------- */
+
+/* The page shows before the game is ready (it has a town to build). Until
+   then the menu's buttons would do nothing, so they wait their turn. */
+#loadingMsg {
+	display: none;
+	margin: 14px 0 6px;
+	font-weight: 900;
+	font-size: 18px;
+	animation: warmUp 1.1s ease-in-out infinite alternate;
+}
+
+body.loading #loadingMsg {
+	display: block;
+}
+
+body.loading #title .big,
+body.loading #title .pauseRow,
+body.loading #best {
+	display: none;
+}
+
+@keyframes warmUp {
+	from {
+		opacity: 0.45;
+	}
+}

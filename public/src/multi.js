@@ -102,6 +102,11 @@ export class Session {
 		this.contest = blankContest();
 		this.sendAccum = 0;
 		this.boardAccum = 0;
+		/**
+		 * Between the relay's welcome and its "you're caught up" marker, what
+		 * arrives is history being replayed, not news (see `onWelcome`).
+		 */
+		this.catchingUp = false;
 	}
 
 	// ---- GameLink (what the game modules call) ----
@@ -276,10 +281,47 @@ export class Session {
 			this.players.set(p.slot, { slot: p.slot, connected: !!p.connected });
 		}
 		this.players.set(this.net.slot, { slot: this.net.slot, connected: true });
-		// What follows (keyframe, events) is the room's truth: replay it from a
-		// clean slate rather than on top of what we already had.
+		// What follows is the room's history: its last checkpoint, then every
+		// event since, and only then a marker saying we're caught up. That happens
+		// on joining and again every time a phone's connection drops and comes
+		// back. Rebuild the contest from it on a clean slate, quietly: these are
+		// things that already happened, so a replayed "this can is yours" must not
+		// hand over the bags a second time.
 		this.contest = blankContest();
+		this.catchingUp = true;
 		this.onChange();
+	}
+
+	/** The relay has finished replaying history: show the town as it now stands. */
+	onResume() {
+		if (!this.catchingUp) return;
+		this.catchingUp = false;
+		this.reconcile();
+	}
+
+	/**
+	 * Make the town match the contest, without fanfare or points: cans and
+	 * dumpsters out where the room says they are (and not where it doesn't),
+	 * treasures gone if anyone has found them.
+	 */
+	reconcile() {
+		if (!this.shift) return;
+		this.contest.cans.forEach((out, i) => {
+			const h = world.houses[i];
+			if (!h) return;
+			if (out && (h.state === 'idle' || h.state === 'done')) putCanOut(h, true);
+			else if (!out && h.state === 'out') rivalTookCan(h, null);
+		});
+		this.contest.bins.forEach((full, i) => {
+			const b = world.bins[i];
+			if (!b) return;
+			if (full) setBinFull(b);
+			else if (b.state === 'out') rivalTookBin(b, null);
+		});
+		this.contest.gems.forEach((slot, i) => {
+			const t = treasures[i];
+			if (slot >= 0 && t) rivalTookTreasure(t, null);
+		});
 	}
 
 	/** @param {any} msg */
@@ -389,6 +431,7 @@ export class Session {
 	confirm(slot, claim) {
 		if (!this.shift) return;
 		if (!applyClaim(this.contest, claim, slot)) return; // someone was first
+		if (this.catchingUp) return; // history: `reconcile` shows where it all ended up
 		const mine = slot === this.net.slot;
 		const who = raccoonFor(slot).name;
 		// Cans and dumpsters put out before the trucks are let go are part of the scenery
@@ -450,20 +493,6 @@ export class Session {
 			return; // not this town: a different build would have been refused earlier
 		}
 		this.contest = k.contest;
-		this.contest.cans.forEach((out, i) => {
-			const h = world.houses[i];
-			if (out && h && h.state === 'idle') putCanOut(h, true);
-		});
-		this.contest.bins.forEach((full, i) => {
-			const b = world.bins[i];
-			if (full && b) setBinFull(b);
-		});
-		this.contest.gems.forEach((slot, i) => {
-			const t = treasures[i];
-			if (slot >= 0 && t) {
-				t.found = true;
-				t.group.visible = false;
-			}
-		});
+		if (!this.catchingUp) this.reconcile();
 	}
 }
