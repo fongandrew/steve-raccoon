@@ -3,6 +3,7 @@ import * as THREE from '../vendor/three.module.js';
 import { audio } from './audio.js';
 import { CAPACITY, DUMPSTER_BAGS, TRASH_COLORS } from './constants.js';
 import { narrate, popup, toast } from './hud.js';
+import { link, tryClaim } from './link.js';
 import { spawnParticle } from './particles.js';
 import { scene, truck, world } from './scene.js';
 import { addScore, state, T } from './state.js';
@@ -102,12 +103,15 @@ export function resetBins() {
 		b.marker.group.visible = false;
 	}
 	state.binSpawnT = 0;
-	// one is waiting right from the start
-	setBinFull(/** @type {Bin} */ (world.bins[(Math.random() * world.bins.length) | 0]));
+	// one is waiting right from the start (online, the host's room decides which)
+	if (!state.online) {
+		setBinFull(/** @type {Bin} */ (world.bins[(Math.random() * world.bins.length) | 0]));
+	}
 }
 
 /** @param {Bin} b */
-function setBinFull(b) {
+export function setBinFull(b) {
+	if (b.state !== 'idle') return;
 	b.state = 'out';
 	b.marker.group.visible = true;
 }
@@ -115,20 +119,25 @@ function setBinFull(b) {
 /** @param {number} dt */
 export function updateBins(dt) {
 	// Keep a couple of full dumpsters around town
+	const net = link.session;
 	state.binSpawnT -= dt;
-	if (state.binSpawnT <= 0) {
+	if (state.binSpawnT <= 0 && (!net || net.isHost())) {
 		state.binSpawnT = 18;
+		const trucks = net ? net.truckSpots() : [T.pos];
 		const out = world.bins.filter((b) => b.state === 'out').length;
 		const idle = world.bins.filter(
 			(b) =>
 				b.state === 'idle' &&
 				b.cooldown <= 0 &&
-				Math.hypot(b.x - T.pos.x, b.z - T.pos.z) > 40,
+				trucks.every((t) => Math.hypot(b.x - t.x, b.z - t.z) > 40),
 		);
 		if (out < 2 && idle.length) {
-			setBinFull(/** @type {Bin} */ (idle[(Math.random() * idle.length) | 0]));
-			if (state.mode === 'playing')
-				toast('🗑️ A dumpster somewhere is overflowing. Steve can feel it.', 3);
+			const b = /** @type {Bin} */ (idle[(Math.random() * idle.length) | 0]);
+			if (net) net.claim({ type: 'binOut', i: world.bins.indexOf(b) });
+			else {
+				setBinFull(b);
+				announceBin();
+			}
 		}
 	}
 	for (const b of world.bins) {
@@ -150,7 +159,9 @@ export function updateBins(dt) {
 		while (dh > Math.PI) dh -= Math.PI * 2;
 		while (dh < -Math.PI) dh += Math.PI * 2;
 		if (lz > 3.8 && lz < 9.8 && Math.abs(lx) < 2.8 && Math.abs(dh) < 0.95) {
-			startLift(b);
+			// Online, the room decides who was first; the lift starts when it says so
+			if (net) tryClaim({ type: 'bin', i: world.bins.indexOf(b) });
+			else startLift(b);
 		} else if (!b.hinted && lz < 9) {
 			b.hinted = true;
 			popup('Line up head-on!', truck.group.position, 'fun', 4);
@@ -159,8 +170,32 @@ export function updateBins(dt) {
 	updateLift(dt);
 }
 
+/** Tell the driver a dumpster has filled up somewhere. */
+export function announceBin() {
+	if (state.mode === 'playing') {
+		toast('🗑️ A dumpster somewhere is overflowing. Steve can feel it.', 3);
+	}
+}
+
+/**
+ * Online: another truck hoisted this dumpster.
+ *
+ * @param {Bin} b
+ * @param {string} who
+ */
+export function rivalTookBin(b, who) {
+	if (b.state !== 'out') return;
+	b.state = 'idle';
+	b.cooldown = 35;
+	b.hinted = false;
+	b.marker.group.visible = false;
+	b.group.rotation.z = 0;
+	if (Math.hypot(b.x - T.pos.x, b.z - T.pos.z) < 45) popup(`${who} got it!`, b.home, 'bad', 3);
+}
+
 /** @param {Bin} b */
-function startLift(b) {
+export function startLift(b) {
+	if (b.state !== 'out' || state.lift) return;
 	b.state = 'lifting';
 	b.hinted = false;
 	b.marker.group.visible = false;

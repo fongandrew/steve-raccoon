@@ -1,14 +1,24 @@
 // Per-frame shift rules: actions, can pickups, unloading at the dump, hunger and snacks.
 import * as THREE from '../vendor/three.module.js';
 import { audio } from './audio.js';
-import { ARMS, canFor, grabSpot, spawnCan, startGrab, updateGrabs } from './cans.js';
+import {
+	ARMS,
+	canFor,
+	grabSpot,
+	pickSpawnHouse,
+	spawnCan,
+	startGrab,
+	updateGrabs,
+} from './cans.js';
 import { ACTIVE_CANS, CAPACITY, GRAB_SPEED, PRACTICE_HUNGER, SHIFT, SNACKS } from './constants.js';
 import { cats, scareCat } from './critters.js';
 import { geese } from './geese.js';
 import { narrate, popup, toast } from './hud.js';
 import { pressed } from './input.js';
+import { link, tryClaim } from './link.js';
 import { updateBins } from './loader.js';
 import { launchBagToPile } from './pile.js';
+import { activeCansFor } from './roster.js';
 import { truck, world } from './scene.js';
 import { endShift } from './shift.js';
 import { addScore, state, T } from './state.js';
@@ -20,7 +30,10 @@ const tmpV = new THREE.Vector3();
 
 /** @param {number} dt */
 export function updateGameplay(dt) {
-	state.time += dt;
+	const net = link.session;
+	// Online, everybody runs on the room's clock
+	if (net) state.time = net.time();
+	else state.time += dt;
 	const pos = truck.group.position;
 	const speed = Math.hypot(T.vel.x, T.vel.z);
 
@@ -80,11 +93,18 @@ export function updateGameplay(dt) {
 	}
 
 	// Cans: spawning, markers, grabbing
+	// Online, only the host puts cans out, and only through the room
 	state.spawnT -= dt;
-	const outCount = world.houses.filter((h) => h.state === 'out').length;
-	if (outCount < ACTIVE_CANS && state.spawnT <= 0) {
-		spawnCan();
-		state.spawnT = 2;
+	if (state.spawnT <= 0 && (!net || net.isHost())) {
+		const players = net ? net.playerCount() : 1;
+		const outCount = world.houses.filter((h) => h.state === 'out').length;
+		if (outCount < activeCansFor(players, ACTIVE_CANS)) {
+			if (net) {
+				const h = pickSpawnHouse(net.truckSpots());
+				if (h) net.claim({ type: 'out', i: world.houses.indexOf(h) });
+			} else spawnCan();
+			state.spawnT = 2 / players;
+		}
 	}
 	for (const h of world.houses) {
 		if (h.cooldown > 0) h.cooldown -= dt;
@@ -121,6 +141,9 @@ export function updateGameplay(dt) {
 							popup('TRUCK FULL!', pos, 'bad');
 							toast('No room! Empty the truck at The Dump first.');
 						}
+					} else if (net) {
+						// The room decides who was first; the grab starts when it says so
+						tryClaim({ type: 'can', i: world.houses.indexOf(h) });
 					} else startGrab(h, arm, spot?.point);
 				} else if (d > 10) h.fullWarned = false;
 			}

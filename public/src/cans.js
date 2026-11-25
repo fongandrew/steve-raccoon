@@ -19,16 +19,29 @@ import { WALK_Y } from './world.js';
  * @typedef {Omit<ArmPose, 'close'>} BoomPose
  */
 
-/** @param {boolean} [silent] skip the toast (cans put out as a shift starts) */
-export function spawnCan(silent = false) {
+/**
+ * A house ready to put its can out: not already out, rested since last time,
+ * and not right under a truck's nose.
+ *
+ * @param {{ x: number, z: number }[]} trucks
+ * @returns {House | null}
+ */
+export function pickSpawnHouse(trucks) {
 	const candidates = world.houses.filter(
 		(h) =>
 			h.state === 'idle' &&
 			h.cooldown <= 0 &&
-			Math.hypot(h.canX - T.pos.x, h.canZ - T.pos.z) > 30,
+			trucks.every((t) => Math.hypot(h.canX - t.x, h.canZ - t.z) > 30),
 	);
-	if (!candidates.length) return;
-	const h = /** @type {House} */ (candidates[(Math.random() * candidates.length) | 0]);
+	if (!candidates.length) return null;
+	return /** @type {House} */ (candidates[(Math.random() * candidates.length) | 0]);
+}
+
+/**
+ * @param {House} h
+ * @param {boolean} [silent] skip the toast (cans put out as a shift starts)
+ */
+export function putCanOut(h, silent = false) {
 	h.state = 'out';
 	h.golden = false; // golden cans retired; the big prizes are dumpsters now
 	const can = h.golden ? h.goldCan : h.can;
@@ -41,6 +54,70 @@ export function spawnCan(silent = false) {
 		if (h.golden) toast(`✨ ${cap(h.name)} on ${h.street} put out a GOLDEN can! ✨`);
 		else if (Math.random() < 0.3) toast(`${cap(h.name)} on ${h.street} put their trash out.`);
 	}
+}
+
+/** @param {boolean} [silent] */
+export function spawnCan(silent = false) {
+	const h = pickSpawnHouse([T.pos]);
+	if (h) putCanOut(h, silent);
+}
+
+/**
+ * Online: the room says this can is ours. Grab it with whichever claw can
+ * reach; if the truck has rolled out of reach since asking, the bags are
+ * still ours, just without the show.
+ *
+ * @param {House} h
+ */
+export function grabConfirmed(h) {
+	if (h.state !== 'out') return;
+	truck.body.updateMatrixWorld(true);
+	let arm = null;
+	let spot = null;
+	for (const a of ARMS) {
+		if (state.grabs.some((g) => g.arm === a)) continue;
+		const r = grabSpot(a, canFor(h).group.position);
+		if (r && (!spot || r.moved < spot.moved)) {
+			arm = a;
+			spot = r;
+		}
+	}
+	if (arm && spot) {
+		startGrab(h, arm, spot.point);
+		return;
+	}
+	emptied(h);
+	collectBags(h);
+}
+
+/**
+ * Online: another truck got this can.
+ *
+ * @param {House} h
+ * @param {string} who
+ */
+export function rivalTookCan(h, who) {
+	if (h.state !== 'out') return;
+	emptied(h);
+	if (Math.hypot(h.canX - T.pos.x, h.canZ - T.pos.z) < 45) {
+		popup(`${who} got it!`, canFor(h).group.position.clone(), 'bad', 1);
+	}
+}
+
+/**
+ * Leave a can standing at the curb, emptied, lid ajar; it goes back in shortly.
+ *
+ * @param {House} h
+ */
+function emptied(h) {
+	h.state = 'done';
+	h.hideT = 3;
+	h.marker.group.visible = false;
+	h.goldMarker.group.visible = false;
+	const can = canFor(h);
+	can.group.position.y = WALK_Y;
+	can.group.rotation.z = 0;
+	can.lid.rotation.x = -0.6;
 }
 
 /**

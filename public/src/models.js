@@ -68,9 +68,15 @@ import * as THREE from '../vendor/three.module.js';
  */
 
 /**
+ * A truck's colours and the name on its side (see roster.js).
+ * @typedef {{ name: string, body: number, dark: number, ink: string }} Livery
+ */
+
+/**
  * @typedef {object} TruckModel
  * @property {THREE.Group} group moves with the physics
  * @property {THREE.Group} body bounces and squashes inside `group`
+ * @property {(livery: Livery) => void} setLivery repaint the body and lettering
  * @property {THREE.Group[]} wheels the spinning part of all six wheels
  * @property {THREE.Group[]} frontWheels the steering pivots of the front pair
  * @property {[ArmModel, ArmModel]} arms right (-x) then left
@@ -787,18 +793,16 @@ export function makeTruck() {
 	hz.rotation.y = Math.PI;
 	body.add(hz);
 	// License plate
-	const plate = new THREE.Mesh(
-		new THREE.PlaneGeometry(0.8, 0.4),
-		new THREE.MeshBasicMaterial({
-			map: textTexture(['STEVE 1'], {
-				w: 256,
-				h: 128,
-				bg: '#fffbe8',
-				color: '#1d5e37',
-				font: 'bold 58px "Trebuchet MS", sans-serif',
-			}),
+	const plateMat = new THREE.MeshBasicMaterial({
+		map: textTexture(['STEVE 1'], {
+			w: 256,
+			h: 128,
+			bg: '#fffbe8',
+			color: '#1d5e37',
+			font: 'bold 58px "Trebuchet MS", sans-serif',
 		}),
-	);
+	});
+	const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.4), plateMat);
 	plate.position.set(0, 0.95, -4.14);
 	plate.rotation.y = Math.PI;
 	body.add(plate);
@@ -1025,9 +1029,41 @@ export function makeTruck() {
 	const hopperLocal = new THREE.Vector3(0, 3.4, HOP_Z); // mouth of the open hopper
 	const rearLocal = new THREE.Vector3(0, 2.5, -4.2); // rear door, for unloading
 
+	// Livery: every truck gets its own copies of the two body-colour materials
+	// (the shared ones would repaint every truck at once), so a room can have a
+	// green Steve, a blue Gary and so on.
+	const bodyMat = toon(TRUCK_GREEN).clone();
+	const darkMat = toon(GREEN_DARK).clone();
+	body.traverse((obj) => {
+		const m = /** @type {THREE.Mesh} */ (obj);
+		if (m.material === toon(TRUCK_GREEN)) m.material = bodyMat;
+		else if (m.material === toon(GREEN_DARK)) m.material = darkMat;
+	});
+	/** @param {Livery} livery */
+	const setLivery = (livery) => {
+		bodyMat.color.setHex(livery.body);
+		darkMat.color.setHex(livery.dark);
+		const NAME = livery.name.toUpperCase();
+		logoMat.map?.dispose();
+		logoMat.map = textTexture([`${NAME}'S`, 'TRASH CO.'], {
+			font: 'bold 96px "Trebuchet MS", sans-serif',
+			color: '#fff9e6',
+			stroke: livery.ink,
+		});
+		plateMat.map?.dispose();
+		plateMat.map = textTexture([`${NAME} 1`], {
+			w: 256,
+			h: 128,
+			bg: '#fffbe8',
+			color: livery.ink,
+			font: 'bold 58px "Trebuchet MS", sans-serif',
+		});
+	};
+
 	return {
 		group,
 		body,
+		setLivery,
 		wheels,
 		frontWheels,
 		arms: /** @type {[ArmModel, ArmModel]} */ (arms),

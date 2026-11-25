@@ -41,6 +41,7 @@
 				<div id="status"></div>
 			</div>
 			<canvas id="minimap" width="400" height="400"></canvas>
+			<div id="board" class="hidden"></div>
 			<div id="toast"></div>
 			<div id="popups"></div>
 			<div id="hint">
@@ -117,8 +118,46 @@
 					</li>
 				</ul>
 				<button id="startBtn" class="big">Start Shift</button>
-				<button id="practiceBtn" class="mini">🚧 Practice (no clock)</button>
+				<div class="pauseRow">
+					<button id="practiceBtn" class="mini">🚧 Practice (no clock)</button>
+					<button id="friendsBtn" class="mini">👥 Play with friends</button>
+				</div>
 				<p id="best" class="small"></p>
+			</div>
+		</div>
+
+		<div id="lobby" class="overlay hidden">
+			<div class="card">
+				<h2>Play with friends 👥</h2>
+				<div id="lobbyJoin">
+					<p>Up to four trucks, one town. Most points by sundown wins.</p>
+					<button id="lobbyHost" class="big">Start a room</button>
+					<p class="small">or join one with its code:</p>
+					<div class="pauseRow">
+						<input
+							id="codeInput"
+							type="text"
+							inputmode="text"
+							autocapitalize="characters"
+							autocomplete="off"
+							spellcheck="false"
+							maxlength="6"
+							placeholder="CODE"
+							aria-label="Room code"
+						/>
+						<button id="lobbyGo" class="mini">Join</button>
+					</div>
+					<p id="lobbyError" class="small" role="alert"></p>
+					<button id="lobbyBack" class="mini">Back</button>
+				</div>
+				<div id="lobbyRoom" class="hidden">
+					<p class="small">Room code</p>
+					<div id="roomCode"></div>
+					<ul id="roomPlayers"></ul>
+					<p id="roomStatus" class="small"></p>
+					<button id="roomStart" class="big hidden">Start Shift</button>
+					<button id="roomLeave" class="mini">🚪 Leave room</button>
+				</div>
 			</div>
 		</div>
 
@@ -131,6 +170,7 @@
 					<button id="unstickBtn" class="mini">🪝 Unstick truck</button>
 					<button id="muteBtn" class="mini">🔊 Sound on</button>
 					<button id="endBtn" class="mini hidden">🏁 End practice</button>
+					<button id="leaveBtn" class="mini hidden">🚪 Leave room</button>
 				</div>
 			</div>
 		</div>
@@ -140,6 +180,7 @@
 				<h2>Shift Over!</h2>
 				<div id="stars"></div>
 				<p id="rank"></p>
+				<table id="leaderboard" class="hidden"></table>
 				<table id="resultTable"></table>
 				<div id="reviewBox">
 					<svg
@@ -321,6 +362,10 @@
 				</div>
 				<p id="newBest" class="hidden">✨ New personal best! ✨</p>
 				<button id="againBtn" class="big">Another Shift</button>
+				<div id="roomRow" class="hidden">
+					<p id="waitHost" class="small hidden"></p>
+					<button id="resultsLeave" class="mini">🚪 Leave room</button>
+				</div>
 			</div>
 		</div>
 

@@ -3,6 +3,7 @@
 import * as THREE from '../vendor/three.module.js';
 import { CAPACITY } from './constants.js';
 import { $ } from './hud.js';
+import { rivals } from './rivals.js';
 import { world } from './scene.js';
 import { state, T } from './state.js';
 import { BLOCK, HALF, N, ROAD, roadCenter } from './world.js';
@@ -154,6 +155,18 @@ export function drawMinimap(time) {
 		mctx.lineWidth = 1.5 * MK;
 		mctx.fillRect(x - 5 * MK, y - 4 * MK, 10 * MK, 8 * MK);
 		mctx.strokeRect(x - 5 * MK, y - 4 * MK, 10 * MK, 8 * MK);
+	}
+	// the other trucks, in their colours
+	for (const r of rivals.values()) {
+		if (!r.seen) continue;
+		const [rx, ry] = toMap(r.x, r.z);
+		mctx.fillStyle = r.css;
+		mctx.strokeStyle = '#2b2d33';
+		mctx.lineWidth = 1.5 * MK;
+		mctx.beginPath();
+		mctx.arc(rx, ry, 4.5 * MK, 0, Math.PI * 2);
+		mctx.fill();
+		mctx.stroke();
 	}
 	// truck
 	const [tx, ty] = toMap(T.pos.x, T.pos.z);

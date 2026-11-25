@@ -902,3 +902,141 @@ body.touch .touchOnly {
 	place-items: center;
 	font-size: 64px;
 }
+
+/* ---------- Play with friends ---------- */
+
+#codeInput {
+	width: 7.5em;
+	padding: 8px 10px;
+	border: 3px solid #2b2d33;
+	border-radius: 12px;
+	background: #fffdf5;
+	font: inherit;
+	font-size: 20px;
+	font-weight: 900;
+	letter-spacing: 0.18em;
+	text-align: center;
+	text-transform: uppercase;
+	user-select: text;
+	-webkit-user-select: text;
+	touch-action: manipulation;
+}
+
+#lobbyError {
+	min-height: 1.2em;
+	color: #c8402e;
+	font-weight: 700;
+}
+
+#roomCode {
+	font-size: 46px;
+	font-weight: 900;
+	letter-spacing: 0.16em;
+	line-height: 1.1;
+	user-select: text;
+	-webkit-user-select: text;
+}
+
+#roomPlayers {
+	list-style: none;
+	margin: 12px auto;
+	padding: 0;
+	width: fit-content;
+	text-align: left;
+}
+
+#roomPlayers li {
+	margin: 5px 0;
+}
+
+/* a raccoon's colour chip, wherever players are listed */
+#roomPlayers i,
+#board i,
+#leaderboard i {
+	display: inline-block;
+	width: 0.8em;
+	height: 0.8em;
+	margin-right: 0.45em;
+	border: 2px solid #2b2d33;
+	border-radius: 50%;
+	vertical-align: -0.05em;
+}
+
+#leaderboard {
+	margin: 4px auto 12px;
+	border-collapse: collapse;
+	font-size: 17px;
+	font-weight: 700;
+}
+
+#leaderboard td {
+	padding: 3px 10px;
+	text-align: left;
+}
+
+#leaderboard td:last-child {
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+
+#leaderboard tr.me {
+	background: rgba(255, 210, 63, 0.35);
+}
+
+#roomRow {
+	margin-top: 8px;
+}
+
+/* In-game scoreboard: under the stats strip, beside Steve's portrait */
+#board {
+	position: fixed;
+	top: 66px;
+	left: calc(122px + env(safe-area-inset-left));
+	padding: 4px 8px;
+	border: 2px solid #2b2d33;
+	border-radius: 10px;
+	background: rgba(255, 252, 240, 0.85);
+	font-size: 12px;
+	font-weight: 700;
+	pointer-events: none;
+}
+
+#board div {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	line-height: 1.5;
+}
+
+#board span {
+	flex: 1;
+	margin-right: 10px;
+}
+
+#board .me span::after {
+	content: ' (you)';
+	font-weight: 400;
+}
+
+#board b {
+	font-variant-numeric: tabular-nums;
+}
+
+/* Name over each of the other trucks */
+.nameTag {
+	position: absolute;
+	transform: translate(-50%, -100%);
+	padding: 1px 8px;
+	border: 2px solid #2b2d33;
+	border-radius: 999px;
+	background: var(--who, #fff);
+	color: #fff;
+	font-size: 13px;
+	font-weight: 900;
+	text-shadow: 0 1px 0 #2b2d33;
+	white-space: nowrap;
+}
+
+.nameTag.stale {
+	opacity: 0.45;
+}

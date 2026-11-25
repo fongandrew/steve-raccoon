@@ -1,9 +1,15 @@
 // The shift's game state and the truck's physical body. Everything a new
 // shift starts over lives here, so `resetShiftState()` is the whole reset.
 import * as THREE from '../vendor/three.module.js';
+import { startOffset } from './roster.js';
 import { blockCenter, ROAD_Y, roadCenter } from './world.js';
 
-/** @typedef {'title' | 'playing' | 'paused' | 'results'} Mode */
+/**
+ * `countdown` is the few seconds before an online shift starts: everyone is
+ * parked on the grid, nobody can drive yet.
+ *
+ * @typedef {'title' | 'countdown' | 'playing' | 'paused' | 'results'} Mode
+ */
 
 /** @typedef {ReturnType<typeof newStats>} Stats */
 
@@ -57,6 +63,7 @@ export const newStats = () => ({
 	loads: 0,
 	doubles: 0,
 	treasures: 0,
+	bumps: 0,
 	boosts: 0,
 	smashed: 0,
 	geese: 0,
@@ -103,6 +110,7 @@ const newShift = () => ({
 	lastNarration: -99,
 	lastBonk: -9,
 	lastGooseHonk: -9,
+	lastBump: -9,
 	stats: newStats(),
 });
 
@@ -111,6 +119,12 @@ export const state = {
 	mode: 'title',
 	/** Practice mode: no clock, no results, no best score. Set by `startShift()`. */
 	practice: false,
+	/** In a room with other trucks: the clock is the relay's, and nothing pauses. */
+	online: false,
+	/** Which raccoon this player is (their relay slot; 0 = Steve, and always 0 solo). */
+	slot: 0,
+	/** Online, the pause menu is only an overlay: the shift carries on behind it. */
+	menuOpen: false,
 	...newShift(),
 };
 
@@ -132,10 +146,16 @@ export const T = {
 	roll: 0,
 };
 
-/** Back to the start of a shift: fresh counters, truck parked at the depot corner. */
-export function resetShiftState() {
+/**
+ * Back to the start of a shift: fresh counters, truck parked at the depot
+ * corner (each raccoon in their own spot on the grid).
+ *
+ * @param {number} [slot]
+ */
+export function resetShiftState(slot = 0) {
 	Object.assign(state, newShift());
-	T.pos.set(roadCenter(3), 0, blockCenter(2));
+	const { dx, dz } = startOffset(slot);
+	T.pos.set(roadCenter(3) + dx, 0, blockCenter(2) + dz);
 	T.vel.set(0, 0, 0);
 	T.heading = 0;
 	T.y = ROAD_Y;

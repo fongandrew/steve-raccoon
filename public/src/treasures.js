@@ -2,6 +2,7 @@
 import * as THREE from '../vendor/three.module.js';
 import { audio } from './audio.js';
 import { popup, toast } from './hud.js';
+import { link, tryClaim } from './link.js';
 import { makeTreasure } from './models.js';
 import { burst, spawnParticle } from './particles.js';
 import { scene, truck, world } from './scene.js';
@@ -104,27 +105,56 @@ export function updateTreasures(dt) {
 		}
 		const dy = t.y - (T.y + 1.6);
 		if (Math.hypot(t.x - T.pos.x, t.z - T.pos.z) < 3.4 && Math.abs(dy) < 2.3) {
-			t.found = true;
-			t.group.visible = false;
-			state.stats.treasures++;
-			addScore(50);
-			audio.treasure();
-			burst(t.group.position.clone(), 30, {
-				colors: [0xffffff, 0xffd23f, 0xff6bd5, 0x6ec6ff],
-				size: 0.25,
-				life: 1.1,
-				grav: 8,
-				speed: 10,
-				up: 8,
-			});
-			popup('TREASURE! +50', truck.group.position, 'gold', 4);
-			const n = state.stats.treasures;
-			toast(
-				`💎 Steve found ${t.name}! Into the hoard it goes. (${n}/${treasures.length})`,
-				4,
-			);
-			if (n === treasures.length)
-				setTimeout(() => toast('👑 The hoard is complete. Steve weeps with joy.', 4), 1500);
+			// Online, the room decides who touched it first
+			if (link.session) tryClaim({ type: 'gem', i: treasures.indexOf(t) });
+			else collectTreasure(t);
 		}
 	}
+}
+
+/**
+ * This truck found a treasure.
+ *
+ * @param {Treasure} t
+ */
+export function collectTreasure(t) {
+	if (t.found) return;
+	t.found = true;
+	t.group.visible = false;
+	state.stats.treasures++;
+	addScore(50);
+	audio.treasure();
+	burst(t.group.position.clone(), 30, {
+		colors: [0xffffff, 0xffd23f, 0xff6bd5, 0x6ec6ff],
+		size: 0.25,
+		life: 1.1,
+		grav: 8,
+		speed: 10,
+		up: 8,
+	});
+	popup('TREASURE! +50', truck.group.position, 'gold', 4);
+	const n = state.stats.treasures;
+	const left = treasures.filter((x) => !x.found).length;
+	toast(
+		link.session
+			? `💎 Steve found ${t.name}! Into the hoard it goes. (${left} still out there)`
+			: `💎 Steve found ${t.name}! Into the hoard it goes. (${n}/${treasures.length})`,
+		4,
+	);
+	if (!link.session && n === treasures.length) {
+		setTimeout(() => toast('👑 The hoard is complete. Steve weeps with joy.', 4), 1500);
+	}
+}
+
+/**
+ * Online: another truck found this one.
+ *
+ * @param {Treasure} t
+ * @param {string} who
+ */
+export function rivalTookTreasure(t, who) {
+	if (t.found) return;
+	t.found = true;
+	t.group.visible = false;
+	if (state.mode === 'playing') toast(`💎 ${who} found ${t.name}.`, 3);
 }

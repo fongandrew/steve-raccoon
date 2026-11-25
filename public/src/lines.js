@@ -71,6 +71,12 @@ export const LINES = {
 		'Up and over! Steve ducks. Steve always ducks.',
 		'The dumpster goes over the cab. Steve does not look up.',
 	],
+	bump: [
+		'Professional courtesy, Steve explains, is for professionals.',
+		'The trucks have exchanged insurance details. Neither has any.',
+		'Steve calls it "merging."',
+		'There is room in this town for only one trash truck. There are several.',
+	],
 	prop: [
 		'Steve insists that was like that already.',
 		'Steve calls it "abstract landscaping."',

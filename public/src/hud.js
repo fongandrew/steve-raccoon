@@ -3,6 +3,8 @@
 import * as THREE from '../vendor/three.module.js';
 import { CAPACITY, SHIFT } from './constants.js';
 import { pickLine } from './lines.js';
+import { link } from './link.js';
+import { raccoonFor } from './roster.js';
 import { camera } from './scene.js';
 import { state } from './state.js';
 import { boostLevel, fmtCountdown } from './util.js';
@@ -27,6 +29,7 @@ export const hud = {
 	status: $('status'),
 	toast: $('toast'),
 	popups: $('popups'),
+	board: $('board'),
 	brake: $('btnBrake'),
 };
 /**
@@ -82,6 +85,8 @@ export function updatePopups(dt) {
  * @param {number} [dur] seconds on screen
  */
 export function toast(msg, dur = 3.2) {
+	// The narrator knows every raccoon as Steve; online, say who is actually driving
+	if (state.online && state.slot) msg = msg.replaceAll('Steve', raccoonFor(state.slot).name);
 	const el = document.createElement('div');
 	el.className = 'toast-msg';
 	el.textContent = msg;
@@ -106,10 +111,36 @@ export function narrate(kind, chance = 1, force = false) {
 	toast(pickLine(kind), 3.6);
 }
 
+let boardKey = '';
+/** Online: everyone's score, best first, redrawn only when it changes. */
+function updateBoard() {
+	const table = link.session?.table() ?? [];
+	const key = table.map((p) => `${p.slot}:${p.score}`).join();
+	if (key === boardKey) return;
+	boardKey = key;
+	hud.board.innerHTML = table
+		.map(
+			(p) =>
+				`<div class="${p.me ? 'me' : ''}"><i style="background:${p.css}"></i>` +
+				`<span>${p.name}</span><b>${p.score}</b></div>`,
+		)
+		.join('');
+}
+
 export function updateHud() {
 	hud.score.textContent = String(state.score);
-	hud.clockLabel.textContent = state.practice ? 'Practice' : 'Time left';
-	hud.clock.textContent = state.practice ? '∞' : fmtCountdown(SHIFT - state.time);
+	const waiting = state.mode === 'countdown';
+	hud.clockLabel.textContent = state.practice
+		? 'Practice'
+		: waiting
+			? 'Starting in'
+			: 'Time left';
+	hud.clock.textContent = state.practice
+		? '∞'
+		: waiting
+			? String(Math.max(1, Math.ceil(-state.time)))
+			: fmtCountdown(SHIFT - state.time);
+	updateBoard();
 	hud.clock.style.color = !state.practice && SHIFT - state.time < 30 ? '#e17055' : '';
 	hud.loadText.textContent = `${state.load}/${CAPACITY}`;
 	hud.loadBar.style.width = `${(state.load / CAPACITY) * 100}%`;

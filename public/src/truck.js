@@ -5,6 +5,7 @@ import { GRAVITY, MAX_SPEED } from './constants.js';
 import { narrate, popup, toast } from './hud.js';
 import { keys, touch } from './input.js';
 import { burst, leafBurst } from './particles.js';
+import { rivals } from './rivals.js';
 import { truck, world } from './scene.js';
 import { fellTree } from './smash.js';
 import { addScore, state, T } from './state.js';
@@ -21,7 +22,8 @@ const TOUCH_DRIFT_MIN = 5;
 
 /** @param {number} dt */
 export function updateTruck(dt) {
-	const playing = state.mode === 'playing';
+	// Online, the pause menu is an overlay: the truck just coasts while it's up
+	const playing = state.mode === 'playing' && !state.menuOpen;
 	const fx = Math.sin(T.heading);
 	const fz = Math.cos(T.heading);
 	const rx = -fz;
@@ -235,6 +237,60 @@ export function updateTruck(dt) {
 		}
 	}
 	if (maxImpact > 7) bonk(maxImpact);
+	bumpRivals();
+}
+
+/** Two circles a side, like the static colliders; trucks touch a little inside them. */
+const TRUCK_R = 1.5;
+/** How bouncy truck-on-truck is (0 = they stick, 1 = billiard balls). */
+const BUMP_BOUNCE = 0.55;
+
+/**
+ * Trucks are solid to each other. Each player's game only ever moves its own
+ * truck: it takes half of the push apart and its own half of the bounce (two
+ * equal trucks swapping momentum), and the other player's game does the
+ * mirror image with the same numbers.
+ */
+function bumpRivals() {
+	let hardest = 0;
+	let who = null;
+	for (const r of rivals.values()) {
+		if (!r.seen || Math.abs(r.y - T.y) > 2.6) continue;
+		if (Math.abs(r.x - T.pos.x) > 9 || Math.abs(r.z - T.pos.z) > 9) continue;
+		const rfx = Math.sin(r.heading);
+		const rfz = Math.cos(r.heading);
+		for (const off of [1.9, -1.9]) {
+			for (const roff of [1.9, -1.9]) {
+				const dx = T.pos.x + Math.sin(T.heading) * off - (r.x + rfx * roff);
+				const dz = T.pos.z + Math.cos(T.heading) * off - (r.z + rfz * roff);
+				const d = Math.hypot(dx, dz);
+				if (d >= TRUCK_R * 2 || d < 1e-3) continue;
+				const nx = dx / d;
+				const nz = dz / d;
+				// A parked (or lagging) truck won't move itself out of the way
+				const share = Math.hypot(r.vx, r.vz) < 0.5 ? 1 : 0.5;
+				T.pos.x += nx * (TRUCK_R * 2 - d) * share;
+				T.pos.z += nz * (TRUCK_R * 2 - d) * share;
+				const closing = (T.vel.x - r.vx) * nx + (T.vel.z - r.vz) * nz;
+				if (closing < 0) {
+					const kick = (-(1 + BUMP_BOUNCE) / 2) * closing;
+					T.vel.x += nx * kick;
+					T.vel.z += nz * kick;
+					if (-closing > hardest) {
+						hardest = -closing;
+						who = r;
+					}
+				}
+			}
+		}
+	}
+	if (!who || hardest < 4) return;
+	bonk(hardest * 0.8);
+	if (state.mode !== 'playing' || state.time - state.lastBump < 1) return;
+	state.lastBump = state.time;
+	state.stats.bumps++;
+	popup(hardest > 12 ? 'WHAM!' : 'BUMP!', truck.group.position, 'fun', 3);
+	narrate('bump', state.stats.bumps === 1 ? 1 : 0.3, state.stats.bumps === 1);
 }
 
 function releaseBoost() {
