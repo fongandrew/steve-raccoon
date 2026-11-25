@@ -1,8 +1,8 @@
 // Per-frame shift rules: actions, can pickups, unloading at the dump, hunger and snacks.
 import * as THREE from '../vendor/three.module.js';
 import { audio } from './audio.js';
-import { ARMS, canFor, canToArm, spawnCan, startGrab, updateGrabs } from './cans.js';
-import { ACTIVE_CANS, CAPACITY, SHIFT, SNACKS } from './constants.js';
+import { ARMS, canFor, grabSpot, spawnCan, startGrab, updateGrabs } from './cans.js';
+import { ACTIVE_CANS, CAPACITY, GRAB_SPEED, PRACTICE_HUNGER, SHIFT, SNACKS } from './constants.js';
 import { cats, scareCat } from './critters.js';
 import { geese } from './geese.js';
 import { narrate, popup, toast } from './hud.js';
@@ -45,7 +45,8 @@ export function updateGameplay(dt) {
 
 	// Hunger
 	const wasHangry = state.hangry;
-	state.hunger = Math.max(0, state.hunger - dt * 1.45);
+	// In practice Steve gets peckish enough to snack, but never hangry
+	state.hunger = Math.max(state.practice ? PRACTICE_HUNGER : 0, state.hunger - dt * 1.45);
 	state.hangry = state.hunger <= 0;
 	if (state.hangry && !wasHangry) {
 		toast(
@@ -98,21 +99,19 @@ export function updateGameplay(dt) {
 			const ph = h.x * 0.7;
 			cg.position.y = WALK_Y + (near ? Math.abs(Math.sin(state.time * 9 + ph)) * 0.28 : 0);
 			cg.rotation.z = near ? Math.sin(state.time * 18 + ph) * 0.07 : 0;
-			if (T.grounded && Math.abs(T.fwd) < 5) {
+			if (T.grounded && Math.abs(T.fwd) < GRAB_SPEED) {
 				const d = Math.hypot(h.canX - T.pos.x, h.canZ - T.pos.z);
-				// Whichever claw is free and on the can's side takes it
+				// Whichever free claw can get to the can most easily takes it
 				let arm = null;
+				let spot = null;
 				if (d < 10) {
 					for (const a of ARMS) {
 						if (state.grabs.some((g) => g.arm === a)) continue;
-						const r = canToArm(a, canFor(h).group.position);
-						if (
-							r.side > 0.3 &&
-							r.ext > 0.2 &&
-							r.ext < a.MAX_EXT &&
-							Math.abs(r.yaw) < 1.1
-						)
+						const r = grabSpot(a, canFor(h).group.position);
+						if (r && (!spot || r.moved < spot.moved)) {
 							arm = a;
+							spot = r;
+						}
 					}
 				}
 				if (arm) {
@@ -122,7 +121,7 @@ export function updateGameplay(dt) {
 							popup('TRUCK FULL!', pos, 'bad');
 							toast('No room! Empty the truck at The Dump first.');
 						}
-					} else startGrab(h, arm);
+					} else startGrab(h, arm, spot?.point);
 				} else if (d > 10) h.fullWarned = false;
 			}
 		} else if (h.state === 'done') {
@@ -210,6 +209,7 @@ export function updateGameplay(dt) {
 	}
 
 	// Time
+	if (state.practice) return; // no clock: drive as long as you like
 	const left = SHIFT - state.time;
 	if (!state.warned && left < 30) {
 		state.warned = true;

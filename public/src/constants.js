@@ -1,6 +1,10 @@
 // Tunables and data tables. No DOM, no three.js.
 
-export const SHIFT = 240; // seconds per shift
+export const SHIFT = 300; // seconds per shift
+/** Slower than this (and on the ground) and the claws will go for a can. */
+export const GRAB_SPEED = 6.5;
+/** Tummy level Steve's hunger stops at in practice mode. */
+export const PRACTICE_HUNGER = 50;
 export const CAPACITY = 12;
 export const MAX_SPEED = 24;
 export const ACTIVE_CANS = 7;

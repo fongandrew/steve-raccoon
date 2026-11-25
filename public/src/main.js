@@ -16,7 +16,15 @@ import { updatePigeons } from './pigeons.js';
 import { updatePile } from './pile.js';
 import { renderPortrait } from './portrait.js';
 import { camera, renderer, scene, world } from './scene.js';
-import { endShift, initScreens, resetGame, setPaused, startShift, syncMuteBtn } from './shift.js';
+import {
+	endPractice,
+	endShift,
+	initScreens,
+	resetGame,
+	setPaused,
+	startShift,
+	syncMuteBtn,
+} from './shift.js';
 import { updateAmbient, updateSky } from './sky.js';
 import { updateBushes, updateProps } from './smash.js';
 import { state, T } from './state.js';
@@ -85,7 +93,9 @@ function update(dt) {
 	} else if (camera.view && camera.view.enabled) {
 		camera.clearViewOffset();
 	}
-	updateSky(state.mode === 'title' ? 0.3 : Math.min(1, state.time / SHIFT));
+	// Practice has no sunset to race: it stays a bright mid-morning
+	const day = state.mode === 'title' || state.practice ? 0.3 : state.time / SHIFT;
+	updateSky(Math.min(1, day));
 	updateCamera(dt, elapsed);
 	updateGuide(elapsed);
 	updatePopups(dt);
@@ -134,6 +144,7 @@ export function start() {
 		cats,
 		treasures,
 		startShift,
+		endPractice,
 		endShift,
 		setPaused,
 		/**

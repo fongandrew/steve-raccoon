@@ -1,8 +1,9 @@
 // Treasures: floating gems hidden round town for Steve's hoard.
+import * as THREE from '../vendor/three.module.js';
 import { audio } from './audio.js';
 import { popup, toast } from './hud.js';
 import { makeTreasure } from './models.js';
-import { burst } from './particles.js';
+import { burst, spawnParticle } from './particles.js';
 import { scene, truck, world } from './scene.js';
 import { addScore, state, T } from './state.js';
 import { LAWN_Y, N, ROAD_Y, roadCenter } from './world.js';
@@ -21,6 +22,9 @@ const TREASURE_NAMES = [
 ];
 const TREASURE_COLORS = [0xff6bd5, 0x6ec6ff, 0xffd23f, 0x7cf3a0, 0xc77dff, 0xff8c42];
 /** @typedef {import('./world.js').Block} Block */
+
+const sparkleAt = new THREE.Vector3();
+const sparkleVel = new THREE.Vector3(0, 0.6, 0);
 
 /**
  * @typedef {import('./models.js').TreasureModel & {
@@ -57,7 +61,6 @@ export const treasures = [];
 	spots.forEach(([x, z, y], i) => {
 		const t = makeTreasure(/** @type {number} */ (TREASURE_COLORS[i % TREASURE_COLORS.length]));
 		t.group.position.set(x, y, z);
-		t.beam.position.y = 20 - (y - 1.6);
 		scene.add(t.group);
 		treasures.push({
 			...t,
@@ -83,6 +86,22 @@ export function updateTreasures(dt) {
 		if (t.found) continue;
 		t.spin.rotation.y += dt * 2;
 		t.spin.position.y = Math.sin(state.time * 2.5 + t.x) * 0.2;
+		// A twinkle now and then, so a jewel catches the eye from down the street
+		if (Math.random() < dt * 2.5 && Math.hypot(t.x - T.pos.x, t.z - T.pos.z) < 90) {
+			sparkleAt.set(
+				t.x + (Math.random() - 0.5) * 2.2,
+				t.y + (Math.random() - 0.3) * 2,
+				t.z + (Math.random() - 0.5) * 2.2,
+			);
+			spawnParticle({
+				pos: sparkleAt,
+				vel: sparkleVel,
+				color: 0xffffff,
+				size: 0.16,
+				life: 0.45,
+				grow: 1.2,
+			});
+		}
 		const dy = t.y - (T.y + 1.6);
 		if (Math.hypot(t.x - T.pos.x, t.z - T.pos.z) < 3.4 && Math.abs(dy) < 2.3) {
 			t.found = true;

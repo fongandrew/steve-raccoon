@@ -19,6 +19,7 @@ export const $ = (id) => /** @type {HTMLElement} */ (document.getElementById(id)
 export const hud = {
 	score: $('score'),
 	clock: $('clock'),
+	clockLabel: $('clockLabel'),
 	loadText: $('loadText'),
 	loadBar: $('loadBar'),
 	hungerText: $('hungerText'),
@@ -106,8 +107,9 @@ export function narrate(kind, chance = 1, force = false) {
 
 export function updateHud() {
 	hud.score.textContent = String(state.score);
-	hud.clock.textContent = fmtCountdown(SHIFT - state.time);
-	hud.clock.style.color = SHIFT - state.time < 30 ? '#e17055' : '';
+	hud.clockLabel.textContent = state.practice ? 'Practice' : 'Time left';
+	hud.clock.textContent = state.practice ? '∞' : fmtCountdown(SHIFT - state.time);
+	hud.clock.style.color = !state.practice && SHIFT - state.time < 30 ? '#e17055' : '';
 	hud.loadText.textContent = `${state.load}/${CAPACITY}`;
 	hud.loadBar.style.width = `${(state.load / CAPACITY) * 100}%`;
 	hud.loadBar.classList.toggle('full', state.load >= CAPACITY);

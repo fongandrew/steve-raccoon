@@ -83,6 +83,46 @@ export function canToArm(arm, p) {
 	return { ext: horiz - ARM.GRIP, yaw: Math.atan2(z, -x), side: -x };
 }
 
+// A can the arm can't quite reach is still fair game if it is in the "close
+// band" beside the truck: too near the wheels, under the truck, or a bit too
+// far fore or aft. The arm scoots it out to the nearest spot it can grip.
+const MIN_SIDE = 1.0; // nearest the gripper can work, sideways from the arm's base
+const MAX_YAW = 1.1; // how far the boom swings fore and aft (radians)
+const CLOSE_Z = 3.6; // how far fore or aft of the arm the close band runs
+const CLOSE_SIDE = 3.2; // how far out the close band runs
+const HALF_TRUCK = 1.9; // arm base to the truck's centre line: each arm covers its half
+
+/**
+ * Where this arm would take hold of a can standing at `p`: `p` itself when it
+ * is within reach, a nearby reachable point when it is merely too close or
+ * off to one end, or `null` when the truck really is too far away.
+ *
+ * @param {ArmModel} arm
+ * @param {THREE.Vector3} p
+ * @returns {{ point: THREE.Vector3, moved: number } | null} `moved` is how far the can gets scooted
+ */
+export function grabSpot(arm, p) {
+	arm.base.worldToLocal(armTmp.copy(p));
+	const c = Math.cos(arm.base.rotation.y);
+	const sn = Math.sin(arm.base.rotation.y);
+	const side = -(armTmp.x * c + armTmp.z * sn);
+	const z = -armTmp.x * sn + armTmp.z * c;
+	const ext = Math.hypot(side, z) - ARM.GRIP;
+	if (side > 0.3 && ext > 0.2 && ext < arm.MAX_EXT && Math.abs(Math.atan2(z, side)) < MAX_YAW) {
+		return { point: p.clone(), moved: 0 };
+	}
+	if (side <= -HALF_TRUCK || side >= CLOSE_SIDE || Math.abs(z) >= CLOSE_Z) return null;
+	const side2 = Math.max(side, MIN_SIDE);
+	const zMax = side2 * Math.tan(MAX_YAW - 0.1);
+	const z2 = Math.max(-zMax, Math.min(zMax, z));
+	// back from the un-yawed frame to the arm base's own, then out to the world
+	const point = arm.base.localToWorld(
+		new THREE.Vector3(-side2 * c - z2 * sn, armTmp.y, -side2 * sn + z2 * c),
+	);
+	point.y = p.y;
+	return { point, moved: point.distanceTo(p) };
+}
+
 /**
  * @param {ArmModel} arm
  * @param {ArmPose} pose
@@ -123,8 +163,9 @@ const swing = (k) => {
 /**
  * @param {House} h
  * @param {ArmModel} arm
+ * @param {THREE.Vector3} [spot] where to grip the can, if not where it stands (see `grabSpot`)
  */
-export function startGrab(h, arm) {
+export function startGrab(h, arm, spot) {
 	h.state = 'grabbing';
 	h.marker.group.visible = false;
 	h.goldMarker.group.visible = false;
@@ -140,7 +181,8 @@ export function startGrab(h, arm) {
 		attached: false,
 		released: false,
 		hold: true,
-		home: can.group.position.clone(),
+		from: can.group.position.clone(),
+		home: (spot ?? can.group.position).clone(),
 		rotY: can.group.rotation.y,
 	};
 	// Grabbing on both sides at nearly the same time is a double grab
@@ -198,6 +240,12 @@ function updateGrab(g, dt) {
 	let close = 0;
 	if (t < GRAB.end.reach) {
 		pose = lerpPose(REST, grabPose, ease(GRAB.phase(t, 'reach')));
+		// A can that was out of reach gets scooted to where the gripper will close
+		can.group.position.lerpVectors(
+			g.from,
+			g.home,
+			ease(Math.min(1, GRAB.phase(t, 'reach') * 2)),
+		);
 	} else if (t < GRAB.end.grip) {
 		pose = grabPose;
 		close = ease(GRAB.phase(t, 'grip'));

@@ -54,16 +54,36 @@ function showBest() {
 	const b = getBest();
 	$('best').textContent = b ? `Personal best: ${b}` : 'Tip: full loads pay a big bonus.';
 }
-export function startShift() {
+/**
+ * Start a shift, or a practice run: the same town with no clock and no results.
+ *
+ * @param {boolean} [practice]
+ */
+export function startShift(practice = false) {
 	audio.init();
 	audio.resume();
 	resetGame();
+	state.practice = practice;
 	state.mode = 'playing';
 	$('title').classList.add('hidden');
 	$('results').classList.add('hidden');
+	$('pause').classList.add('hidden');
 	$('hud').classList.remove('hidden');
+	$('endBtn').classList.toggle('hidden', !practice);
 	hud.toast.innerHTML = '';
-	toast('☀️ Good morning, Steve! Empty the glowing trash cans before the sun goes down.', 4);
+	if (practice) toast('🚧 Practice run: no clock. Pause (P) to end it whenever you like.', 5);
+	else toast('☀️ Good morning, Steve! Empty the glowing trash cans before the sun goes down.', 4);
+}
+
+/** Leave a practice run: straight back to the title screen, nothing recorded. */
+export function endPractice() {
+	resetGame();
+	state.practice = false;
+	state.mode = 'title';
+	hud.toast.innerHTML = '';
+	$('pause').classList.add('hidden');
+	$('hud').classList.add('hidden');
+	$('title').classList.remove('hidden');
 }
 
 export function endShift() {
@@ -118,8 +138,10 @@ export function syncMuteBtn() {
 /** Wire the title / pause / results buttons. Call once, from `start()`. */
 export function initScreens() {
 	showBest();
-	$('startBtn').addEventListener('click', startShift);
-	$('againBtn').addEventListener('click', startShift);
+	$('startBtn').addEventListener('click', () => startShift());
+	$('practiceBtn').addEventListener('click', () => startShift(true));
+	$('againBtn').addEventListener('click', () => startShift());
+	$('endBtn').addEventListener('click', endPractice);
 	$('resumeBtn').addEventListener('click', () => setPaused(false));
 	$('unstickBtn').addEventListener('click', () => {
 		setPaused(false);

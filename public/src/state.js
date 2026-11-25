@@ -18,7 +18,8 @@ import { blockCenter, ROAD_Y, roadCenter } from './world.js';
  * @property {boolean} attached can is parented to the gripper
  * @property {boolean} released can is back on the curb
  * @property {boolean} hold truck must stay put (until the can is released)
- * @property {THREE.Vector3} home where the can stood
+ * @property {THREE.Vector3} from where the can stood
+ * @property {THREE.Vector3} home where the arm grips it and sets it back down
  * @property {number} rotY the can's heading at the curb
  */
 
@@ -107,6 +108,8 @@ const newShift = () => ({
 export const state = {
 	/** @type {Mode} */
 	mode: 'title',
+	/** Practice mode: no clock, no results, no best score. Set by `startShift()`. */
+	practice: false,
 	...newShift(),
 };
 

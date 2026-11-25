@@ -28,7 +28,7 @@
 			<div id="stats">
 				<div class="stat"><span class="label">Score</span><span id="score">0</span></div>
 				<div class="stat">
-					<span class="label">Time left</span><span id="clock">4:00</span>
+					<span class="label" id="clockLabel">Time left</span><span id="clock">5:00</span>
 				</div>
 				<div class="meter">
 					<span class="label">🗑️ Load <b id="loadText">0/12</b></span>
@@ -89,8 +89,8 @@
 						may vary.
 					</li>
 					<li>
-						Find Steve's 10 lost <b>treasures</b> (follow the beams of light). Some need
-						a <b>jump</b>.
+						Find Steve's 10 lost <b>treasures</b> (they sparkle). Some need a
+						<b>jump</b>.
 					</li>
 					<li>Geese do not move. Ever. Plan accordingly.</li>
 					<li>
@@ -117,6 +117,7 @@
 					</li>
 				</ul>
 				<button id="startBtn" class="big">Start Shift</button>
+				<button id="practiceBtn" class="mini">🚧 Practice (no clock)</button>
 				<p id="best" class="small"></p>
 			</div>
 		</div>
@@ -129,6 +130,7 @@
 				<div class="pauseRow">
 					<button id="unstickBtn" class="mini">🪝 Unstick truck</button>
 					<button id="muteBtn" class="mini">🔊 Sound on</button>
+					<button id="endBtn" class="mini hidden">🏁 End practice</button>
 				</div>
 			</div>
 		</div>

@@ -129,8 +129,7 @@ import * as THREE from '../vendor/three.module.js';
 /**
  * @typedef {object} TreasureModel
  * @property {THREE.Group} group
- * @property {THREE.Group} spin the gem and its halo
- * @property {THREE.Mesh<THREE.CylinderGeometry, THREE.MeshBasicMaterial>} beam
+ * @property {THREE.Group} spin the jewel, which turns and bobs
  */
 
 /**
@@ -1739,7 +1738,9 @@ export function makeStatue() {
 }
 
 /**
- * A shiny lost treasure: a spinning gem with a halo and a beam of light.
+ * A shiny lost treasure: a spinning brilliant-cut jewel. Flat facets and a
+ * glossy material make it flash as it turns; a little of its own colour glows
+ * through so it still reads in shade and at dusk.
  * @param {number} color
  * @returns {TreasureModel}
  */
@@ -1747,25 +1748,49 @@ export function makeTreasure(color) {
 	const g = new THREE.Group();
 	const spin = new THREE.Group();
 	g.add(spin);
-	const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.7, 0), glow(color, 0.7));
-	gem.scale.y = 1.4;
-	spin.add(shadowy(gem));
-	const halo = new THREE.Mesh(new THREE.TorusGeometry(1.1, 0.07, 6, 24), glow(0xffffff, 1));
-	halo.rotation.x = Math.PI / 2;
-	spin.add(halo);
-	const beam = new THREE.Mesh(
-		new THREE.CylinderGeometry(0.5, 0.9, 40, 12, 1, true),
-		new THREE.MeshBasicMaterial({
-			color,
-			transparent: true,
-			opacity: 0.22,
-			depthWrite: false,
-			side: THREE.DoubleSide,
-		}),
-	);
-	beam.position.y = 20;
-	g.add(beam);
-	return { group: g, spin, beam };
+	const mat = new THREE.MeshStandardMaterial({
+		color,
+		emissive: color,
+		emissiveIntensity: 0.25,
+		roughness: 0.12,
+		metalness: 0.15,
+		flatShading: true,
+		vertexColors: true,
+	});
+	const FACETS = 8;
+	const GIRDLE = 0.8;
+	// Cut glass has light and dark facets side by side whatever the lighting, so
+	// each face gets its own shade (and the table on top is nearly white).
+	const facet = (/** @type {THREE.BufferGeometry} */ indexed, /** @type {number[]} */ shades) => {
+		const geo = indexed.toNonIndexed();
+		const pos = /** @type {THREE.BufferAttribute} */ (geo.getAttribute('position'));
+		const nor = /** @type {THREE.BufferAttribute} */ (geo.getAttribute('normal'));
+		const col = new Float32Array(pos.count * 3);
+		for (let f = 0; f < pos.count / 3; f++) {
+			// side faces come two triangles to a facet; caps are flagged by their normal
+			const cap = Math.abs(nor.getY(f * 3)) > 0.99;
+			const k = cap ? 1.9 : /** @type {number} */ (shades[(f >> 1) % shades.length]);
+			col.fill(k, f * 9, f * 9 + 9);
+		}
+		geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+		return new THREE.Mesh(geo, mat);
+	};
+	// crown: the flat table on top, sloping out to the girdle
+	const crown = facet(new THREE.CylinderGeometry(0.45, GIRDLE, 0.34, FACETS), [1.35, 0.85]);
+	crown.position.y = 0.23;
+	const girdle = facet(new THREE.CylinderGeometry(GIRDLE, GIRDLE, 0.06, FACETS), [1.1, 0.95]);
+	girdle.position.y = 0.03;
+	// pavilion: down to the point
+	const pavilion = facet(new THREE.CylinderGeometry(0.001, GIRDLE, 0.95, FACETS), [0.6, 1.0]);
+	pavilion.rotation.x = Math.PI;
+	pavilion.rotation.y = Math.PI / FACETS; // facets staggered against the crown's
+	pavilion.position.y = -0.475;
+	const gem = new THREE.Group();
+	gem.add(shadowy(crown), shadowy(girdle), shadowy(pavilion));
+	gem.rotation.z = 0.22; // a jaunty tilt, so the table flashes as it spins
+	gem.scale.setScalar(1.15);
+	spin.add(gem);
+	return { group: g, spin };
 }
 
 // ---------------------------------------------------------------------------
