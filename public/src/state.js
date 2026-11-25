@@ -83,6 +83,7 @@ const newShift = () => ({
 	lift: null, // front-loader lift in progress
 	binSpawnT: 0,
 	driftCharge: 0,
+	touchDrift: false, // touch controls: the brake is being held as a drift
 	boostT: 0,
 	goldenHour: false,
 	spawnT: 0,

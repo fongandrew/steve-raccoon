@@ -87,8 +87,9 @@ You have one five-minute shift (the countdown is top-left; the sun sets as it ru
 | P / Esc              | Pause                             |
 | M                    | Mute                              |
 
-On phones and tablets (landscape): drag anywhere on the left half to drive and steer (pull back
-to reverse), hold **DRIFT** on the right to drift and release to boost, 📯 honks, tap Steve's
+On phones and tablets (landscape): slide your left thumb sideways to steer; hold your right
+thumb down to go and pull it down to brake and reverse. There is no drift button: brake while
+turning at speed and the truck drifts instead, then let go to boost. 📯 honks, tap Steve's
 face to snack, and the pause button has unstick and sound options.
 
 ## How it's built

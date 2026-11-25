@@ -167,7 +167,10 @@ body {
 	font-weight: 900;
 	font-size: 26px;
 	color: #fff;
-	-webkit-text-stroke: 1.5px #2b2d33;
+	/* The outline is painted behind the letters. Stroked on top, a heavy font
+	   shows every overlapping piece of each glyph as a stray line inside it. */
+	-webkit-text-stroke: 4px #2b2d33;
+	paint-order: stroke fill;
 	text-shadow: 0 3px 0 #2b2d33;
 	white-space: nowrap;
 	animation: pop 0.35s cubic-bezier(0.2, 2, 0.4, 1);
@@ -312,41 +315,152 @@ body.touch #hint {
 	display: none;
 }
 
-#stickZone {
+#steerZone,
+#pedalZone {
 	position: fixed;
-	left: 0;
 	bottom: 0;
-	width: 46vw;
-	height: 72vh;
+	width: 50vw;
+	height: 74vh;
 	touch-action: none;
 }
 
-#stick {
+#steerZone {
+	left: 0;
+}
+
+#pedalZone {
+	right: 0;
+}
+
+/* Both controls rest, faint, in their corners and jump to the thumb on touch */
+#stick,
+#pedal {
 	position: fixed;
-	width: 120px;
-	height: 120px;
-	margin: -60px 0 0 -60px;
-	border-radius: 50%;
+	bottom: 26px;
 	border: 3px solid rgba(43, 45, 51, 0.6);
 	background: rgba(255, 252, 240, 0.3);
 	pointer-events: none;
-	display: none;
+	opacity: 0.45;
+}
+
+#stick.on,
+#pedal.on {
+	bottom: auto;
+	opacity: 1;
+}
+
+/* Steering: a short rail the knob slides along */
+#stick {
+	left: calc(96px + env(safe-area-inset-left));
+	width: 156px;
+	height: 60px;
+	margin: 0 0 0 -78px;
+	border-radius: 30px;
 }
 
 #stick.on {
-	display: block;
+	margin-top: -30px;
 }
 
-#knob {
+#stick::before,
+#stick::after {
+	position: absolute;
+	top: 50%;
+	transform: translateY(-50%);
+	font-size: 16px;
+	font-weight: 900;
+	color: rgba(43, 45, 51, 0.7);
+}
+
+#stick::before {
+	content: '◀';
+	left: 9px;
+}
+
+#stick::after {
+	content: '▶';
+	right: 9px;
+}
+
+#knob,
+#pedalKnob {
 	position: absolute;
 	left: 50%;
-	top: 50%;
-	width: 54px;
-	height: 54px;
-	margin: -27px 0 0 -27px;
+	width: 50px;
+	height: 50px;
+	margin-left: -25px;
 	border-radius: 50%;
 	background: rgba(255, 252, 240, 0.9);
 	border: 3px solid #2b2d33;
+	z-index: 1;
+}
+
+#knob {
+	top: 50%;
+	margin-top: -25px;
+}
+
+/* Pedal: up is go, down is brake (and, through a turn, drift) */
+#pedal {
+	right: calc(30px + env(safe-area-inset-right));
+	width: 66px;
+	height: 112px;
+	border-radius: 33px;
+}
+
+#pedal.on {
+	right: auto;
+	margin: -36px 0 0 -33px;
+}
+
+#pedalKnob {
+	top: 8px;
+	background: #7bd67a;
+	transition: transform 0.08s;
+}
+
+#pedal.brake #pedalKnob {
+	background: #ff8a7a;
+}
+
+#pedal span {
+	position: absolute;
+	left: 0;
+	right: 0;
+	text-align: center;
+	font-size: 9px;
+	font-weight: 900;
+	letter-spacing: 0.04em;
+	color: rgba(43, 45, 51, 0.75);
+}
+
+#pedal .go {
+	top: -15px;
+}
+
+#pedal .stop {
+	bottom: -15px;
+}
+
+/* Drifting: the knob takes the colour of the boost being charged */
+#pedal[data-drift='0'] #pedalKnob {
+	background: #fff;
+}
+
+#pedal[data-drift='1'] #pedalKnob {
+	background: #6ec6ff;
+}
+
+#pedal[data-drift='2'] #pedalKnob {
+	background: #ffa31a;
+}
+
+#pedal[data-drift='3'] #pedalKnob {
+	background: #ff6bd5;
+}
+
+#pedal[data-drift]:not([data-drift='']) .stop {
+	color: #2b2d33;
 }
 
 .tbtn {
@@ -366,20 +480,13 @@ body.touch #hint {
 	background: #ffd23f;
 }
 
-#btnDrift {
-	right: calc(18px + env(safe-area-inset-right));
-	bottom: 20px;
-	width: 96px;
-	height: 96px;
-	font-size: 16px;
-}
-
+/* Under the minimap, out of the pedal thumb's way */
 #btnHonk {
-	right: calc(122px + env(safe-area-inset-right));
-	bottom: 22px;
-	width: 58px;
-	height: 58px;
-	font-size: 24px;
+	right: calc(8px + env(safe-area-inset-right));
+	top: 126px;
+	width: 50px;
+	height: 50px;
+	font-size: 22px;
 }
 
 #btnPause {
@@ -392,6 +499,7 @@ body.touch #hint {
 
 body.touch #portrait {
 	bottom: auto;
+	z-index: 2; /* above the steering zone, so a tap on Steve is a snack */
 }
 
 @media (orientation: portrait) {
@@ -495,7 +603,8 @@ h1 {
 	font-size: 54px;
 	margin: 6px 0 0;
 	color: #3fb26b;
-	-webkit-text-stroke: 2px #2b2d33;
+	-webkit-text-stroke: 5px #2b2d33;
+	paint-order: stroke fill;
 	text-shadow: 0 5px 0 #2b2d33;
 	letter-spacing: 0.02em;
 }
@@ -556,7 +665,8 @@ p.small {
 	font-size: 54px;
 	letter-spacing: 6px;
 	color: #ffc93c;
-	-webkit-text-stroke: 2px #2b2d33;
+	-webkit-text-stroke: 5px #2b2d33;
+	paint-order: stroke fill;
 }
 
 #rank {

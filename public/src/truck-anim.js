@@ -1,7 +1,7 @@
 // Truck and Steve animation: everything visual that follows from the physics state.
 import * as THREE from '../vendor/three.module.js';
 import { BOOST_COLORS, CAPACITY } from './constants.js';
-import { keys } from './input.js';
+import { keys, touch } from './input.js';
 import { LIFT } from './loader.js';
 import { spawnParticle } from './particles.js';
 import { steve, truck, world } from './scene.js';
@@ -60,7 +60,7 @@ export function animateTruck(dt, time) {
 	truck.beacon.rotation.y += dt * 6;
 
 	// Exhaust puffs
-	const throttle = keys.has('gas') && state.mode === 'playing' ? 1 : 0;
+	const throttle = (keys.has('gas') || touch.gas) && state.mode === 'playing' ? 1 : 0;
 	if (Math.random() < (0.15 + throttle * 0.5) * dt * 60 * 0.25) {
 		const p = truck.group.localToWorld(tmpV.set(1.25, 3.9, 1.3));
 		spawnParticle({

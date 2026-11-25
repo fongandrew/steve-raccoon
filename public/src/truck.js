@@ -3,7 +3,7 @@ import * as THREE from '../vendor/three.module.js';
 import { audio } from './audio.js';
 import { GRAVITY, MAX_SPEED } from './constants.js';
 import { narrate, popup, toast } from './hud.js';
-import { keys, stick } from './input.js';
+import { keys, touch } from './input.js';
 import { burst, leafBurst } from './particles.js';
 import { truck, world } from './scene.js';
 import { fellTree } from './smash.js';
@@ -15,27 +15,41 @@ const tmpV2 = new THREE.Vector3();
 
 const prevPos = new THREE.Vector3();
 
+/** Touch drifting starts above this forward speed, and gives up below the other. */
+const TOUCH_DRIFT_START = 8;
+const TOUCH_DRIFT_MIN = 5;
+
 /** @param {number} dt */
 export function updateTruck(dt) {
 	const playing = state.mode === 'playing';
-	// Thumbstick: push any way but down to drive (steering by its sideways
-	// amount), pull down to brake / reverse.
-	const sMag = Math.hypot(stick.x, stick.y);
-	const stickGas = stick.active && sMag > 0.3 && stick.y < 0.45;
-	const stickBrake = stick.active && stick.y > 0.55;
-	const gas = playing && (keys.has('gas') || stickGas) ? 1 : 0;
-	const brake = playing && (keys.has('brake') || stickBrake) ? 1 : 0;
-	let steerIn = playing ? (keys.has('left') ? 1 : 0) - (keys.has('right') ? 1 : 0) : 0;
-	if (playing && stick.active && Math.abs(stick.x) > 0.12)
-		steerIn = -Math.max(-1, Math.min(1, stick.x * 1.25));
-	const drift = playing && keys.has('drift');
-
 	const fx = Math.sin(T.heading);
 	const fz = Math.cos(T.heading);
 	const rx = -fz;
 	const rz = fx;
 	let fwd = T.vel.x * fx + T.vel.z * fz;
 	let lat = T.vel.x * rx + T.vel.z * rz;
+
+	let steerIn = playing ? (keys.has('left') ? 1 : 0) - (keys.has('right') ? 1 : 0) : 0;
+	if (playing && Math.abs(touch.steer) > 0.12) {
+		steerIn = -Math.max(-1, Math.min(1, touch.steer * 1.25));
+	}
+	// Touch has no drift button. Braking while already turning at speed kicks
+	// the back end out instead of slowing down, and the drift lasts until the
+	// thumb comes off the brake (or the truck has all but stopped).
+	if (state.touchDrift) {
+		if (!playing || !touch.brake || fwd < TOUCH_DRIFT_MIN) state.touchDrift = false;
+	} else if (
+		playing &&
+		touch.brake &&
+		T.grounded &&
+		fwd > TOUCH_DRIFT_START &&
+		Math.abs(steerIn) > 0.3
+	) {
+		state.touchDrift = true;
+	}
+	const gas = playing && (keys.has('gas') || touch.gas || state.touchDrift) ? 1 : 0;
+	const brake = playing && (keys.has('brake') || (touch.brake && !state.touchDrift)) ? 1 : 0;
+	const drift = playing && (keys.has('drift') || state.touchDrift);
 
 	const lawn = isOnLawn(world, T.pos.x, T.pos.z);
 	let maxSpeed = MAX_SPEED;

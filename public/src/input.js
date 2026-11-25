@@ -1,5 +1,5 @@
 // Player input: held keys (`keys`), this frame's key presses (`pressed`) and the
-// touch thumbstick (`stick`), fed by the keyboard and the on-screen controls.
+// touch controls (`touch`), fed by the keyboard and the on-screen controls.
 import { audio } from './audio.js';
 
 /** @type {Set<string>} */
@@ -26,16 +26,24 @@ const KEYMAP = {
 	KeyM: 'mute',
 	Enter: 'enter',
 };
-// --- Touch: a floating thumbstick on the left, DRIFT + HONK on the right,
-// tap Steve's portrait to snack, pause button for everything else.
-export const stick = {
-	active: false,
-	id: /** @type {number | null} */ (null),
-	ox: 0,
-	oy: 0,
-	x: 0,
-	y: 0,
+// --- Touch: the left thumb steers, the right thumb works the pedal (hold to
+// go, pull down to brake). There is no drift button: braking through a turn at
+// speed is the drift (see truck.js). 📯 honks, tapping Steve's portrait is a
+// snack, and the pause button has everything else.
+export const touch = {
+	/** -1 (full left) .. 1 (full right) */
+	steer: 0,
+	gas: false,
+	brake: false,
 };
+
+/** Full steering lock is this far from where the thumb landed (px). */
+const STEER_R = 50;
+/** Pull the pedal thumb down this far (px) to brake... */
+const BRAKE_PULL = 24;
+/** ...and bring it back up this far to get back on the gas. */
+const GAS_PUSH = 16;
+
 function enableTouch() {
 	if (!document.body.classList.contains('touch')) document.body.classList.add('touch');
 }
@@ -81,57 +89,130 @@ export function initInput() {
 		btn.addEventListener('pointercancel', up);
 		btn.addEventListener('pointerleave', up);
 	}
-	{
-		const zone = /** @type {HTMLElement} */ (document.getElementById('stickZone'));
-		const ring = /** @type {HTMLElement} */ (document.getElementById('stick'));
-		const knob = /** @type {HTMLElement} */ (document.getElementById('knob'));
-		const R = 50;
-		/** @param {PointerEvent} e */
-		const move = (e) => {
-			if (e.pointerId !== stick.id) return;
-			let dx = e.clientX - stick.ox;
-			let dy = e.clientY - stick.oy;
-			const d = Math.hypot(dx, dy);
-			if (d > R) {
-				// drag the base along so the stick never feels stuck at the rim
-				stick.ox += (dx / d) * (d - R);
-				stick.oy += (dy / d) * (d - R);
-				dx = (dx / d) * R;
-				dy = (dy / d) * R;
-				ring.style.left = `${stick.ox}px`;
-				ring.style.top = `${stick.oy}px`;
-			}
-			stick.x = dx / R;
-			stick.y = dy / R;
-			knob.style.transform = `translate(${dx}px, ${dy}px)`;
-		};
+	/**
+	 * Follow one finger in a zone. A synthetic pointer (a test) can't be
+	 * captured, which is fine: the zone still gets its moves.
+	 *
+	 * @param {HTMLElement} zone
+	 * @param {{ down: (e: PointerEvent) => void, move: (e: PointerEvent) => void, up: () => void }} on
+	 */
+	const track = (zone, on) => {
+		/** @type {number | null} */
+		let id = null;
 		zone.addEventListener('pointerdown', (e) => {
+			if (id !== null) return;
 			e.preventDefault();
 			audio.init();
 			audio.resume();
-			zone.setPointerCapture(e.pointerId);
-			Object.assign(stick, {
-				active: true,
-				id: e.pointerId,
-				ox: e.clientX,
-				oy: e.clientY,
-				x: 0,
-				y: 0,
-			});
-			ring.style.left = `${e.clientX}px`;
-			ring.style.top = `${e.clientY}px`;
-			knob.style.transform = '';
-			ring.classList.add('on');
+			try {
+				zone.setPointerCapture(e.pointerId);
+			} catch {
+				// not a real pointer
+			}
+			id = e.pointerId;
+			on.down(e);
 		});
-		zone.addEventListener('pointermove', move);
+		zone.addEventListener('pointermove', (e) => {
+			if (e.pointerId === id) on.move(e);
+		});
 		/** @param {PointerEvent} e */
 		const end = (e) => {
-			if (e.pointerId !== stick.id) return;
-			Object.assign(stick, { active: false, id: null, x: 0, y: 0 });
-			ring.classList.remove('on');
+			if (e.pointerId !== id) return;
+			id = null;
+			on.up();
 		};
 		zone.addEventListener('pointerup', end);
 		zone.addEventListener('pointercancel', end);
+	};
+	const el = (/** @type {string} */ id) =>
+		/** @type {HTMLElement} */ (document.getElementById(id));
+
+	// Left thumb: steering. Only sideways movement counts.
+	{
+		const ring = el('stick');
+		const knob = el('knob');
+		let ox = 0;
+		/** @param {PointerEvent} e */
+		const move = (e) => {
+			let dx = e.clientX - ox;
+			if (Math.abs(dx) > STEER_R) {
+				// drag the base along so the wheel never feels stuck at full lock
+				ox += dx - Math.sign(dx) * STEER_R;
+				dx = Math.sign(dx) * STEER_R;
+				ring.style.left = `${ox}px`;
+			}
+			touch.steer = dx / STEER_R;
+			knob.style.transform = `translateX(${dx}px)`;
+		};
+		track(el('steerZone'), {
+			down: (e) => {
+				ox = e.clientX;
+				touch.steer = 0;
+				ring.style.left = `${e.clientX}px`;
+				ring.style.top = `${e.clientY}px`;
+				knob.style.transform = '';
+				ring.classList.add('on');
+			},
+			move,
+			up: () => {
+				touch.steer = 0;
+				// back to its resting spot in the corner
+				ring.style.left = '';
+				ring.style.top = '';
+				knob.style.transform = '';
+				ring.classList.remove('on');
+			},
+		});
+	}
+
+	// Right thumb: the pedal. Down is gas; pull down to brake, push back up for gas.
+	{
+		const pedal = el('pedal');
+		const knob = el('pedalKnob');
+		/** The highest the thumb has been while on the gas, or the lowest while braking. */
+		let ref = 0;
+		const show = () => {
+			pedal.classList.toggle('brake', touch.brake);
+			knob.style.transform = touch.brake ? 'translateY(34px)' : '';
+		};
+		track(el('pedalZone'), {
+			down: (e) => {
+				ref = e.clientY;
+				touch.gas = true;
+				touch.brake = false;
+				pedal.style.left = `${e.clientX}px`;
+				pedal.style.top = `${e.clientY}px`;
+				pedal.classList.add('on');
+				show();
+			},
+			move: (e) => {
+				const y = e.clientY;
+				if (touch.gas) {
+					ref = Math.min(ref, y);
+					if (y - ref > BRAKE_PULL) {
+						touch.gas = false;
+						touch.brake = true;
+						ref = y;
+					}
+				} else {
+					ref = Math.max(ref, y);
+					if (ref - y > GAS_PUSH) {
+						touch.gas = true;
+						touch.brake = false;
+						ref = y;
+					}
+				}
+				show();
+			},
+			up: () => {
+				touch.gas = false;
+				touch.brake = false;
+				pedal.style.left = '';
+				pedal.style.top = '';
+				pedal.classList.remove('on');
+				show();
+			},
+		});
 	}
 	const portrait = /** @type {HTMLElement} */ (document.getElementById('portrait'));
 	portrait.addEventListener('pointerdown', (e) => {

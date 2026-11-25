@@ -9,7 +9,7 @@ import { updateGameplay } from './gameplay.js';
 import { geese, updateGeese } from './geese.js';
 import { updateGuide } from './guide.js';
 import { toast, updateHud, updatePopups } from './hud.js';
-import { initInput, keys, pressed } from './input.js';
+import { initInput, keys, pressed, touch } from './input.js';
 import { drawMinimap } from './minimap.js';
 import { updateParticles } from './particles.js';
 import { updatePigeons } from './pigeons.js';
@@ -103,7 +103,7 @@ function update(dt) {
 		updateHud();
 		drawMinimap(elapsed);
 	}
-	audio.setEngine(T.fwd, keys.has('gas') ? 1 : 0, state.mode === 'playing');
+	audio.setEngine(T.fwd, keys.has('gas') || touch.gas ? 1 : 0, state.mode === 'playing');
 	audio.updateMusic(state.mode === 'playing');
 	pressed.clear();
 }
@@ -138,6 +138,7 @@ export function start() {
 		state,
 		T,
 		keys,
+		touch,
 		world,
 		renderer,
 		geese,
