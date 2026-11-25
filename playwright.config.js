@@ -14,11 +14,22 @@ export default defineConfig({
 		trace: 'off',
 	},
 	projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
-	webServer: {
-		command: 'npm run dev',
-		url: 'http://localhost:3000',
-		reuseExistingServer: !process.env['CI'],
-		stdout: 'ignore',
-		stderr: 'pipe',
-	},
+	// The static site, plus the netplay relay (Node adapter synced from
+	// pomelo-penguin) for the two-browser multiplayer spec.
+	webServer: [
+		{
+			command: 'npm run dev',
+			url: 'http://localhost:3000',
+			reuseExistingServer: !process.env['CI'],
+			stdout: 'ignore',
+			stderr: 'pipe',
+		},
+		{
+			command: 'npm run dev:relay',
+			url: 'http://127.0.0.1:8788/health',
+			reuseExistingServer: !process.env['CI'],
+			stdout: 'ignore',
+			stderr: 'pipe',
+		},
+	],
 });

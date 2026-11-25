@@ -5,10 +5,14 @@
  * bundling: modules ship as separate files, vendored Three.js included). Then
  * stamp the service worker: PRECACHE is every shipped file and VERSION is a
  * sha256 of exactly those bytes, so any change to any file is a new cache.
+ * The same hash goes into version.json as the netplay `buildId` (a room pins
+ * on it, so two phones on different deploys get a clean "reload" instead of a
+ * silent desync).
  *
- * sw.js and _headers are left out of both the hash and PRECACHE: the first
- * would be chicken-and-egg, and Netlify consumes _headers as configuration
- * rather than serving it (a precached 404 fails cache.addAll()).
+ * sw.js, version.json and _headers are left out of both the hash and
+ * PRECACHE: the first two would be chicken-and-egg, and Netlify consumes
+ * _headers as configuration rather than serving it (a precached 404 fails
+ * cache.addAll()).
  */
 
 import { execFileSync } from 'node:child_process';
@@ -27,9 +31,11 @@ import { dirname, extname, join, relative } from 'node:path';
 import { transform } from 'esbuild';
 import { minify } from 'html-minifier-terser';
 
+import { PROTO_VERSION } from '../public/src/net/protocol.js';
+
 const SRC = 'public';
 const OUT = 'dist';
-const EXCLUDED = new Set(['sw.js', '_headers', '_redirects']);
+const EXCLUDED = new Set(['sw.js', 'version.json', '_headers', '_redirects']);
 
 /**
  * @param {string} dir
@@ -97,4 +103,8 @@ const stamped = sw
 if (stamped === sw) throw new Error('build: sw.js has no VERSION / PRECACHE to stamp');
 sw = stamped;
 writeFileSync(swPath, sw);
-console.log(`build: ${shipped.length} files → ${OUT}/, version ${version}`);
+writeFileSync(
+	join(OUT, 'version.json'),
+	`${JSON.stringify({ gameId: 'steve-raccoon', buildId: version, protocolVersion: PROTO_VERSION }, null, '\t')}\n`,
+);
+console.log(`build: ${shipped.length} files → ${OUT}/, buildId ${version}`);

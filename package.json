@@ -2,13 +2,13 @@
 	"name": "steve-raccoon",
 	"version": "1.0.0",
 	"private": true,
-	"description": "Steve Raccoon — it's a lovely day and you're a raccoon driving a trash truck",
+	"description": "Steve Raccoon \u2014 it's a lovely day and you're a raccoon driving a trash truck",
 	"type": "module",
 	"scripts": {
 		"postinstall": "node scripts/vendor.js",
 		"dev": "serve public -l 3000",
 		"eslint": "eslint --report-unused-disable-directives --max-warnings 0",
-		"lint": "npm run eslint -- \"public/**/*.{js,html}\" \"tests/**/*.js\" \"scripts/**/*.js\" \"*.js\"",
+		"lint": "npm run eslint -- \"public/**/*.{js,html}\" \"tests/**/*.js\" \"scripts/**/*.js\" \"relay/**/*.js\" \"*.js\"",
 		"lint:fix": "npm run lint -- --fix",
 		"format": "prettier --write \"public/**/*.css\" \"*.{js,json}\" && npm run lint:fix",
 		"typecheck": "tsc --noEmit -p jsconfig.json",
@@ -17,16 +17,20 @@
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"test:e2e": "playwright test --trace off",
-		"check": "npm run vendor:check && npm run lint && npm run typecheck && npm run test && npm run test:e2e",
+		"check": "npm run vendor:check && npm run net:check && npm run lint && npm run typecheck && npm run test && npm run test:e2e",
 		"build": "node scripts/build.js",
 		"deploy": "npm run build && npx --yes netlify-cli@27 deploy --prod --dir=dist --site=3e3fd768-c76d-4518-a20d-bbe3e8cbe9f6",
-		"deploy:draft": "npm run build && npx --yes netlify-cli@27 deploy --dir=dist --site=3e3fd768-c76d-4518-a20d-bbe3e8cbe9f6"
+		"deploy:draft": "npm run build && npx --yes netlify-cli@27 deploy --dir=dist --site=3e3fd768-c76d-4518-a20d-bbe3e8cbe9f6",
+		"dev:relay": "node relay/node-server.js",
+		"net:sync": "node scripts/sync-netplay.js",
+		"net:check": "node scripts/sync-netplay.js --check"
 	},
 	"devDependencies": {
 		"@eslint/js": "^9.39.5",
 		"@playwright/test": "^1.63.0",
 		"@types/node": "^26.6.6",
 		"@types/three": "^0.187.0",
+		"@types/ws": "^8.18.2",
 		"esbuild": "^0.28.2",
 		"eslint": "^9.39.5",
 		"eslint-config-prettier": "^9.1.2",
@@ -42,6 +46,7 @@
 		"serve": "^14.2.8",
 		"three": "0.187.0",
 		"typescript": "^5.9.3",
-		"vitest": "^5.1.1"
+		"vitest": "^5.1.1",
+		"ws": "^8.23.0"
 	}
 }

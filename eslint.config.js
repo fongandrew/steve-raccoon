@@ -19,7 +19,13 @@ export default [
 	{ files: ['public/**/*.html'], plugins: { html } },
 
 	{
-		files: ['public/**/*.{js,html}', 'tests/**/*.js', 'scripts/**/*.js', '*.js'],
+		files: [
+			'public/**/*.{js,html}',
+			'tests/**/*.js',
+			'scripts/**/*.js',
+			'relay/**/*.js',
+			'*.js',
+		],
 		languageOptions: {
 			ecmaVersion: 2022,
 			sourceType: 'module',
@@ -56,7 +62,7 @@ export default [
 	},
 
 	{
-		files: ['tests/**/*.js', 'scripts/**/*.js', '*.js'],
+		files: ['tests/**/*.js', 'scripts/**/*.js', 'relay/**/*.js', '*.js'],
 		languageOptions: { globals: { ...globals.node } },
 	},
 
