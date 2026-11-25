@@ -53,6 +53,28 @@ const centre = (page, id) =>
 		return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
 	}, id);
 
+/**
+ * Down and straight back up, in one go so a slow machine can't stretch a tap
+ * into a hold.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {string} zone
+ * @param {number} x
+ * @param {number} y
+ */
+const tap = (page, zone, x, y) =>
+	page.evaluate(
+		([zoneId, cx, cy]) => {
+			const z = document.getElementById(zoneId);
+			for (const t of ['pointerdown', 'pointerup']) {
+				z.dispatchEvent(
+					new PointerEvent(t, { pointerId: 9, clientX: cx, clientY: cy, bubbles: true }),
+				);
+			}
+		},
+		[zone, x, y],
+	);
+
 const touchState = (/** @type {import('@playwright/test').Page} */ page) =>
 	page.evaluate(() => ({ ...window.__game.touch }));
 
@@ -179,14 +201,12 @@ test('a quick tap off the buttons honks; holds, slides and pedal dabs do not', a
 		['pedalZone', 560, 150],
 		['steerZone', 200, 250],
 	]) {
-		await finger(page, zone, 'pointerdown', 5, x, y);
-		await finger(page, zone, 'pointerup', 5, x, y);
+		await tap(page, zone, x, y);
 		expect(await honked(), zone).toBe(true);
 	}
 
 	// A dab on the gas is not a honk
-	await finger(page, 'pedalZone', 'pointerdown', 5, gas.x, gas.y);
-	await finger(page, 'pedalZone', 'pointerup', 5, gas.x, gas.y);
+	await tap(page, 'pedalZone', gas.x, gas.y);
 	expect(await honked()).toBe(false);
 
 	// Nor is a steering flick
