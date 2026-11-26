@@ -8,6 +8,9 @@ export const PRACTICE_HUNGER = 50;
 /** Tummy lost per second. A full tummy lasts about 83 seconds. */
 export const HUNGER_DRAIN = 1.2;
 export const CAPACITY = 12;
+/** Points for a treasure, and for the rubies you have to jump for. */
+export const TREASURE_POINTS = 50;
+export const JUMP_TREASURE_POINTS = 150;
 /** Points docked for ramming a goose. */
 export const GOOSE_PENALTY = 30;
 export const MAX_SPEED = 24;

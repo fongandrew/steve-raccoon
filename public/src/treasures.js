@@ -1,6 +1,7 @@
 // Treasures: floating gems hidden round town for Steve's hoard.
 import * as THREE from '../vendor/three.module.js';
 import { audio } from './audio.js';
+import { JUMP_TREASURE_POINTS, TREASURE_POINTS } from './constants.js';
 import { popup, toast } from './hud.js';
 import { link, tryClaim } from './link.js';
 import { makeTreasure } from './models.js';
@@ -21,7 +22,10 @@ const TREASURE_NAMES = [
 	"somebody's dentures",
 	'the TV remote everyone was looking for',
 ];
-const TREASURE_COLORS = [0xff6bd5, 0x6ec6ff, 0xffd23f, 0x7cf3a0, 0xc77dff, 0xff8c42];
+// Ground-level jewels. No reds or oranges: those would look like a ruby.
+const TREASURE_COLORS = [0xff6bd5, 0x6ec6ff, 0xffd23f, 0x7cf3a0, 0xc77dff];
+/** The jewels you have to jump for are all rubies, so you know they're worth it. */
+const RUBY = 0xff2a3a;
 /** @typedef {import('./world.js').Block} Block */
 
 const sparkleAt = new THREE.Vector3();
@@ -34,6 +38,7 @@ const sparkleVel = new THREE.Vector3(0, 0.6, 0);
  *   z: number,
  *   name: string,
  *   found: boolean,
+ *   pts: number,
  * }} Treasure
  */
 
@@ -46,6 +51,7 @@ export const treasures = [];
 	for (const r of world.ramps) {
 		spots.push([r.x + r.dirX * (r.len + 7), r.z + r.dirZ * (r.len + 7), LAWN_Y + 5.0]);
 	}
+	const jumps = spots.length;
 	const dumpBlock = /** @type {Block} */ (world.blocks.find((b) => b.type === 'dump'));
 	spots.push([dumpBlock.cx + 15, dumpBlock.cz - 15, LAWN_Y + 1.6]);
 	const plaza = /** @type {Block} */ (world.blocks.find((b) => b.type === 'plaza'));
@@ -60,7 +66,12 @@ export const treasures = [];
 	spots.push([roadCenter(0), roadCenter(0), ROAD_Y + 1.6]);
 	spots.push([roadCenter(N), roadCenter(N), ROAD_Y + 1.6]);
 	spots.forEach(([x, z, y], i) => {
-		const t = makeTreasure(/** @type {number} */ (TREASURE_COLORS[i % TREASURE_COLORS.length]));
+		const jump = i < jumps;
+		const t = makeTreasure(
+			jump
+				? RUBY
+				: /** @type {number} */ (TREASURE_COLORS[(i - jumps) % TREASURE_COLORS.length]),
+		);
 		t.group.position.set(x, y, z);
 		scene.add(t.group);
 		treasures.push({
@@ -70,6 +81,7 @@ export const treasures = [];
 			z,
 			name: /** @type {string} */ (TREASURE_NAMES[i % TREASURE_NAMES.length]),
 			found: false,
+			pts: jump ? JUMP_TREASURE_POINTS : TREASURE_POINTS,
 		});
 	});
 }
@@ -122,7 +134,7 @@ export function collectTreasure(t) {
 	t.found = true;
 	t.group.visible = false;
 	state.stats.treasures++;
-	addScore(50);
+	addScore(t.pts);
 	audio.treasure();
 	burst(t.group.position.clone(), 30, {
 		colors: [0xffffff, 0xffd23f, 0xff6bd5, 0x6ec6ff],
@@ -132,7 +144,7 @@ export function collectTreasure(t) {
 		speed: 10,
 		up: 8,
 	});
-	popup('TREASURE! +50', truck.group.position, 'gold', 4);
+	popup(`TREASURE! +${t.pts}`, truck.group.position, 'gold', 4);
 	const n = state.stats.treasures;
 	const left = treasures.filter((x) => !x.found).length;
 	toast(

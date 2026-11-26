@@ -69,7 +69,8 @@ You have one five-minute shift (the countdown is top-left; the sun sets as it ru
 - **Drift boost:** hold **Space** while turning at speed to drift. The sparks go blue, then
   orange, then pink as the drift charges. Let go to boost.
 - **Treasures:** ten shiny lost treasures are hidden around town for Steve's hoard. They're
-  spinning jewels that twinkle, so keep your eyes open. The ones floating past the park ramps can only be reached with a jump.
+  spinning jewels that twinkle, so keep your eyes open. Each is worth 50 points. The red rubies
+  floating past the park ramps can only be reached with a jump, and they're worth 150.
 - **Feed Steve:** his tummy empties over time. Press **E** to eat a bag from the truck. One bag
   keeps him going for a good while, so a few snacks a shift is plenty. Snacks are random: coffee
   grounds give you the zoomies, flat soda gives you hiccups, and sometimes it's a sock. If his
