@@ -1,15 +1,12 @@
-// Geese (immovable: the truck bounces off them) and the cargo they make it spill.
-import * as THREE from '../vendor/three.module.js';
+// Geese: immovable. The truck bounces off them, and hitting one costs points.
 import { audio } from './audio.js';
-import { GRAVITY } from './constants.js';
+import { GOOSE_PENALTY } from './constants.js';
 import { narrate, popup } from './hud.js';
-import { makeGoose, makeTrashBag } from './models.js';
+import { makeGoose } from './models.js';
 import { scene, truck } from './scene.js';
-import { state, T } from './state.js';
+import { addScore, state, T } from './state.js';
 import { bonk } from './truck.js';
 import { HALF, N, ROAD, ROAD_Y, roadCenter, surfaceHeight } from './world.js';
-
-const tmpV = new THREE.Vector3();
 
 /**
  * @typedef {import('./models.js').GooseModel & {
@@ -27,15 +24,6 @@ const tmpV = new THREE.Vector3();
  *   home?: [number, number],
  * }} Goose
  * `tx`/`tz` is where it is wandering to; `home` (set by `placeGoose`) the spot it wanders round.
- */
-
-/**
- * A bag that has fallen out of the hopper.
- * @typedef {object} SpilledBag
- * @property {THREE.Group} mesh
- * @property {THREE.Vector3} pos
- * @property {THREE.Vector3} vel
- * @property {number} t seconds since it spilled
  */
 
 /** @type {Goose[]} */
@@ -75,27 +63,6 @@ export function placeGoose(g) {
 	g.tx = g.x;
 	g.tz = g.z;
 	g.alert = 0;
-}
-// Spilled cargo: bags that fly out of the hopper and then fade away
-/** @type {SpilledBag[]} */
-export const spilled = [];
-/** @param {number} n how many bags to lose */
-function spill(n) {
-	n = Math.min(n, state.load);
-	state.load -= n;
-	const from = truck.group.localToWorld(tmpV.copy(truck.hopperLocal));
-	for (let i = 0; i < n; i++) {
-		const mesh = makeTrashBag(Math.random);
-		scene.add(mesh);
-		const a = Math.random() * Math.PI * 2;
-		spilled.push({
-			mesh,
-			pos: from.clone(),
-			vel: new THREE.Vector3(Math.cos(a) * 6, 9 + Math.random() * 4, Math.sin(a) * 6),
-			t: 0,
-		});
-	}
-	if (n) popup(`-${n} SPILLED!`, truck.group.position, 'bad', 3);
 }
 /**
  * @param {number} dt
@@ -171,7 +138,8 @@ export function updateGeese(dt, time) {
 						T.vel.multiplyScalar(-0.45);
 						bonk(14);
 						gooseHonk(g, true);
-						spill(3);
+						addScore(-GOOSE_PENALTY);
+						popup(`-${GOOSE_PENALTY}`, truck.group.position, 'bad', 3);
 						state.streak = 0;
 						state.stats.geese++;
 						popup('GOOSE WINS', g.group.position, 'bad', 4);
@@ -196,26 +164,6 @@ export function updateGeese(dt, time) {
 		g.body.rotation.z = walking ? Math.sin(time * 9 + home[0]) * 0.12 : 0;
 		g.neck.rotation.x =
 			g.hop > 0 || standoff ? -0.35 : 0.1 + Math.sin(time * 2 + home[1]) * 0.06;
-	}
-	// Spilled bags tumble out and fade
-	for (let i = spilled.length - 1; i >= 0; i--) {
-		const b = /** @type {SpilledBag} */ (spilled[i]);
-		b.t += dt;
-		b.vel.y -= GRAVITY * dt;
-		b.pos.addScaledVector(b.vel, dt);
-		const floor = surfaceHeight(b.pos.x, b.pos.z);
-		if (b.pos.y < floor) {
-			b.pos.y = floor;
-			b.vel.multiplyScalar(0.4);
-			b.vel.y = Math.abs(b.vel.y) * 0.3;
-		}
-		b.mesh.position.copy(b.pos);
-		b.mesh.rotation.x += dt * 6 * Math.max(0, 1 - b.t);
-		if (b.t > 3) b.mesh.scale.setScalar(Math.max(0.01, 1 - (b.t - 3)));
-		if (b.t > 4) {
-			scene.remove(b.mesh);
-			spilled.splice(i, 1);
-		}
 	}
 }
 /**

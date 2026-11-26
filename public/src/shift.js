@@ -6,7 +6,7 @@ import { resetCamera } from './camera.js';
 import { spawnCan } from './cans.js';
 import { ACTIVE_CANS, BEST_KEY } from './constants.js';
 import { cats, placeCat } from './critters.js';
-import { geese, placeGoose, spilled } from './geese.js';
+import { geese, placeGoose } from './geese.js';
 import { $, hud, toast } from './hud.js';
 import { link } from './link.js';
 import { resetBins } from './loader.js';
@@ -47,8 +47,6 @@ export function resetGame() {
 	resetPile();
 	resetBins();
 	for (const g of geese) placeGoose(g);
-	for (const b of spilled) scene.remove(b.mesh);
-	spilled.length = 0;
 	// Online, the host's room puts the first cans out, the same ones for everybody
 	if (!state.online) for (let i = 0; i < ACTIVE_CANS; i++) spawnCan(true);
 }

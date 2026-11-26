@@ -8,6 +8,8 @@ export const PRACTICE_HUNGER = 50;
 /** Tummy lost per second. A full tummy lasts about 83 seconds. */
 export const HUNGER_DRAIN = 1.2;
 export const CAPACITY = 12;
+/** Points docked for ramming a goose. */
+export const GOOSE_PENALTY = 30;
 export const MAX_SPEED = 24;
 export const ACTIVE_CANS = 7;
 export const GRAVITY = 30;

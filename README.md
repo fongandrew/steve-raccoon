@@ -81,7 +81,7 @@ You have one five-minute shift (the countdown is top-left; the sun sets as it ru
   **CHAOS** combo. Beach balls in the parks and plaza can be punted around, the plaza pigeons
   scatter when you roll up, and trees and bushes burst into leaves when you bump them.
 - **Geese:** they wander the streets and they do not move. Not for you, not for anyone. Hit one
-  and the truck bounces off, spills cargo, and gets honked at. Honk at them and they honk back.
+  and the truck bounces off, loses points, and gets honked at. Honk at them and they honk back.
 - **Townsfolk:** Binsville's residents are out and about: a bear farmer, a fox jogger, a bunny
   lady, a frog kid, a badger granny, a mole mail carrier and a pig baker, plus kittens, a puppy,
   squirrels, garden bunnies and the firehouse dalmatian. They wave at Steve when he's driving
