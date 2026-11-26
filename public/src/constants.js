@@ -5,6 +5,8 @@ export const SHIFT = 300; // seconds per shift
 export const GRAB_SPEED = 6.5;
 /** Tummy level Steve's hunger stops at in practice mode. */
 export const PRACTICE_HUNGER = 50;
+/** Tummy lost per second. A full tummy lasts about 83 seconds. */
+export const HUNGER_DRAIN = 1.2;
 export const CAPACITY = 12;
 export const MAX_SPEED = 24;
 export const ACTIVE_CANS = 7;
@@ -18,17 +20,17 @@ export const STAR_SCORES = /** @type {[number, number, number]} */ ([300, 650, 1
  * @type {{ h: number, msg: string, fx?: 'zoom' | 'hiccups' }[]}
  */
 export const SNACKS = [
-	{ h: 40, msg: 'Half a burrito. Still warm-ish.' },
-	{ h: 25, fx: 'zoom', msg: 'Coffee grounds! Steve is VIBRATING.' },
-	{ h: 20, fx: 'hiccups', msg: 'Flat soda. Oh no. Hiccups.' },
-	{ h: 45, msg: 'Fish bones! A delicacy.' },
-	{ h: 5, msg: '...that was a sock, Steve.' },
-	{ h: 35, msg: 'Pizza crust. The best part.' },
-	{ h: 50, fx: 'zoom', msg: 'Birthday cake! Happy birthday, Steve!' },
-	{ h: 25, msg: 'A banana peel. Vintage.' },
-	{ h: 30, fx: 'hiccups', msg: 'Mystery leftovers. Bold choice.' },
-	{ h: 30, msg: 'Cold french fries. Perfection.' },
-	{ h: 15, msg: 'A single grape. Steve savors it.' },
+	{ h: 85, msg: 'Half a burrito. Still warm-ish.' },
+	{ h: 50, fx: 'zoom', msg: 'Coffee grounds! Steve is VIBRATING.' },
+	{ h: 45, fx: 'hiccups', msg: 'Flat soda. Oh no. Hiccups.' },
+	{ h: 50, msg: 'Fish bones! A delicacy.' },
+	{ h: 10, msg: '...that was a sock, Steve.' },
+	{ h: 80, msg: 'Pizza crust. The best part.' },
+	{ h: 100, fx: 'zoom', msg: 'Birthday cake! Happy birthday, Steve!' },
+	{ h: 50, msg: 'A banana peel. Vintage.' },
+	{ h: 60, fx: 'hiccups', msg: 'Mystery leftovers. Bold choice.' },
+	{ h: 60, msg: 'Cold french fries. Perfection.' },
+	{ h: 35, msg: 'A single grape. Steve savors it.' },
 ];
 
 /**

@@ -10,7 +10,15 @@ import {
 	startGrab,
 	updateGrabs,
 } from './cans.js';
-import { ACTIVE_CANS, CAPACITY, GRAB_SPEED, PRACTICE_HUNGER, SHIFT, SNACKS } from './constants.js';
+import {
+	ACTIVE_CANS,
+	CAPACITY,
+	GRAB_SPEED,
+	HUNGER_DRAIN,
+	PRACTICE_HUNGER,
+	SHIFT,
+	SNACKS,
+} from './constants.js';
 import { cats, scareCat } from './critters.js';
 import { geese } from './geese.js';
 import { narrate, popup, toast } from './hud.js';
@@ -59,7 +67,7 @@ export function updateGameplay(dt) {
 	// Hunger
 	const wasHangry = state.hangry;
 	// In practice Steve gets peckish enough to snack, but never hangry
-	state.hunger = Math.max(state.practice ? PRACTICE_HUNGER : 0, state.hunger - dt * 1.45);
+	state.hunger = Math.max(state.practice ? PRACTICE_HUNGER : 0, state.hunger - dt * HUNGER_DRAIN);
 	state.hangry = state.hunger <= 0;
 	if (state.hangry && !wasHangry) {
 		toast(
